@@ -1,5 +1,6 @@
-# Code Project Configuration
-# Inherits workspace settings from root pyproject.toml
+# The Spy Who Loved Me (1977) — LIPARUS — Special-Agent Mission Software
+# PROJECT BOND film package (local-only working tree, never push).
+# Dep surface: stdlib + numpy + matplotlib + pyyaml + bond-api (frozen protocol).
 
 [build-system]
 requires = ["setuptools>=61.0"]
@@ -7,9 +8,9 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "the_spy_who_loved_me"
-version = "2.5.2"
+version = "0.1.0"
 license = {text = "MIT"}
-description = "Fully-tested codebase with numerical optimization and analysis"
+description = "LIPARUS — passive acoustic submarine tracking, Liparus-class tanker capture, and submersible vehicle forensics"
 authors = [
     {name = "Daniel Ari Friedman", email = "daniel@activeinference.institute"}
 ]
@@ -18,14 +19,20 @@ dependencies = [
     "numpy>=1.24.0",
     "matplotlib>=3.7.0",
     "pyyaml>=6.0",
-    "defusedxml>=0.7.1",
+    "bond-api",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=7.4.0",
     "pytest-cov>=4.1.0",
+    "ruff>=0.6.0",
+    "mypy>=1.10.0",
+    "types-PyYAML>=6.0",
 ]
+
+[tool.uv.sources]
+bond-api = { path = "/Users/4d/Documents/GitHub/template/projects/working/bond/bond-api" }
 
 [tool.pytest.ini_options]
 # RASP Strict Assertion: Tests must be clearly separated and structurally identifiable
@@ -58,6 +65,35 @@ exclude_lines = [
     "if __name__ == .__main__.:",
     "raise NotImplementedError",
 ]
+
+[tool.mypy]
+# Project-local mypy config (the monorepo root has no mypy_path for this
+# package's src/ layout). Mirrors the bond-api build; types-PyYAML supplies
+# the yaml stubs in dev extras.
+python_version = "3.12"
+mypy_path = ["src"]
+explicit_package_bases = true
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+check_untyped_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+
+[[tool.mypy.overrides]]
+# bond_api is a runtime dependency but ships no py.typed marker; treat it as
+# an untyped import rather than erroring (same policy as types-PyYAML).
+module = "bond_api.*"
+ignore_missing_imports = true
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B"]
+ignore = ["E501"]  # line length handled by formatter; long docstrings allowed
 
 [tool.uv]
 # Inherits workspace settings from root pyproject.toml

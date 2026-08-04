@@ -1,52 +1,48 @@
-#!/usr/bin/env python3
-"""Thin orchestrator: generate and inject manuscript variables.
+"""LIPARUS manuscript variable hydration (runs LAST: z_ prefix).
 
-Reads experiment config and analysis outputs, writes
-``output/data/manuscript_variables.json``, and substitutes
-``{{TOKEN}}`` markers in manuscript sections into
-``output/manuscript/`` for PDF rendering.
-
-All computation lives in ``src/manuscript_variables``;
-all injection lives in
-``infrastructure.rendering.manuscript_injection``.
-
-Exit codes:
-    0   variables written and injected successfully
-    1   unexpected error
+Thin wrapper. Computes the ``{{TOKEN}}`` map from ``manuscript/config.yaml``
+plus the deterministic domain-metric runs, writes
+``output/data/manuscript_variables.json``, renders the concept figures, and
+writes the resolved manuscript tree to ``output/manuscript/``.
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
-_PROJECT_ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(_PROJECT_ROOT))
-sys.path.insert(0, str(_PROJECT_ROOT.parents[2]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))  # noqa: E402
+
+from the_spy_who_loved_me.figures import build_all_figures  # noqa: E402
+from the_spy_who_loved_me.manuscript_variables import (  # noqa: E402
+    generate_variables,
+    resolve_manuscript_tree,
+)
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
-def main() -> int:
-    """CLI entry point."""
-    parser = argparse.ArgumentParser(description="Generate manuscript variables for the_spy_who_loved_me")
-    parser.add_argument(
-        "--allow-draft",
-        action="store_true",
-        help="Allow N/A fallbacks when analysis outputs are missing (non-pipeline draft mode)",
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="LIPARUS manuscript variable hydration")
+    parser.add_argument("--allow-draft", action="store_true", help="skip strict output gate")
+    parser.add_argument("--skip-figures", action="store_true", help="do not render figures")
+    args = parser.parse_args(argv)
+
+    variables = generate_variables(require_outputs=not args.allow_draft)
+    data_dir = PROJECT_ROOT / "output" / "data"
+    data_dir.mkdir(parents=True, exist_ok=True)
+    (data_dir / "manuscript_variables.json").write_text(
+        json.dumps(variables, indent=2, sort_keys=True), encoding="utf-8"
     )
-    args = parser.parse_args()
 
-    from infrastructure.rendering.manuscript_injection import write_resolved_manuscript_tree
-    from src.manuscript_variables import generate_variables, save_variables
+    if not args.skip_figures:
+        built = build_all_figures()
+        print("\n".join(f"{k}: {v}" for k, v in built.items()))
 
-    variables = generate_variables(
-        _PROJECT_ROOT,
-        require_analysis_outputs=not args.allow_draft,
-    )
-    out_path = _PROJECT_ROOT / "output" / "data" / "manuscript_variables.json"
-    save_variables(variables, out_path)
-    write_resolved_manuscript_tree(_PROJECT_ROOT, variables)
-    print(str(out_path))
+    output_dir, resolved = resolve_manuscript_tree(variables, strict=not args.allow_draft)
+    print(f"resolved {len(resolved)} manuscript sections -> {output_dir}")
     return 0
 
 

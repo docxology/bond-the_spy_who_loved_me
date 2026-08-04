@@ -6,25 +6,17 @@
       "orcid": "0000-0001-6232-9096"
     }
   ],
-  "description": "Source code for Convergence Analysis of Gradient Descent Optimization (2026).",
+  "description": "LIPARUS — special-agent mission software for The Spy Who Loved Me (1977): passive acoustic detection/tracking, Liparus-class tanker capture, and submersible vehicle forensics. Local-only PROJECT BOND film package.",
   "keywords": [
-    "optimization algorithms",
-    "gradient descent",
-    "convergence analysis",
-    "numerical methods",
-    "mathematical programming",
-    "reproducible research",
-    "infrastructure automation"
+    "passive acoustic detection",
+    "bearing-only target motion analysis",
+    "extended Kalman filter",
+    "Liparus-class tanker capture",
+    "submersible vehicle forensics",
+    "deterministic simulation"
   ],
   "license": "MIT",
-  "related_identifiers": [
-    {
-      "identifier": "10.5281/zenodo.20417136",
-      "relation": "isVersionOf",
-      "scheme": "doi"
-    }
-  ],
-  "title": "Convergence Analysis of Gradient Descent Optimization",
+  "title": "The Spy Who Loved Me: LIPARUS — Special-Agent Mission Software",
   "upload_type": "software",
-  "version": "2.5.2"
+  "version": "0.1.0"
 }

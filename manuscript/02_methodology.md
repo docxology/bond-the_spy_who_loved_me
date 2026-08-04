@@ -1,83 +1,68 @@
 # Methodology {#sec:methodology}
 
-This section describes the implementation methodology, explicitly detailing how the optimization algorithms are constructed, validated, and analyzed using the Generalized Research Template's `infrastructure` and `tests` ecosystems.
+## Passive acoustic detection and bearing-only tracking
 
-## Algorithm Implementation
+`src/the_spy_who_loved_me/sub_tracking.py` models the sensor problem of a
+passive array hunting a submarine that emits nothing deliberately.
 
-### Gradient Descent Algorithm
+**Detection** uses a Neyman–Pearson energy detector
+(`detect_contract`). A received waveform is split into non-overlapping
+windows; each window statistic `T = sum(x^2)/noise_var` is compared against a
+threshold. Under the noise-only hypothesis `T ~ chi^2(window)`, so the
+threshold is the `(1 - P_FA)`-quantile of that chi-square distribution,
+computed in closed form with the Wilson–Hilferty approximation
+(`chi2_quantile`), whose standard-normal-quantile primitive is Acklam's
+algorithm (`inverse_normal_cdf`). The detector therefore makes its decision
+at a controlled false-alarm probability `P_FA`, and `Detection.margin_db`
+reports the statistic-to-threshold margin.
 
-The core algorithm implements the iterative procedure for unconstrained optimization. The [`optimizer` module](https://github.com/docxology/template/blob/main/projects/working/bond/the_spy_who_loved_me/src/optimizer.py) uses the standard-library `logging` logger for optional verbose diagnostics; the [analysis orchestrator](https://github.com/docxology/template/blob/main/projects/working/bond/the_spy_who_loved_me/scripts/optimization_analysis.py) uses `infrastructure.core.logging.utils.get_logger`. Tests run under the hermetic boundaries defined in the [test configuration](https://github.com/docxology/template/blob/main/projects/working/bond/the_spy_who_loved_me/tests/conftest.py).
+**Tracking** is the harder problem. `simulate_target_track` generates a
+deterministic scenario: a constant-velocity submarine observed by a
+*maneuvering* ownship (a dogleg course change), yielding noisy relative
+bearings. The maneuver is not cosmetic — a fundamental result of passive
+sonar is that a constant-velocity target's absolute range and speed are
+*unobservable* from a stationary observer (the whole trajectory can be
+scaled and produce identical bearings). Only a change of observer course
+renders the state observable.
 
-**Algorithm — Gradient Descent (implemented in the [optimizer module](https://github.com/docxology/template/blob/main/projects/working/bond/the_spy_who_loved_me/src/optimizer.py#L87-L173))**
+`estimate_tma` then performs batch least-squares target motion analysis:
+over the state `[px, py, vx, vy]` it minimises the sum of squared bearing
+residuals
+`sum_i (bearing_i - atan2(p_y + v_y t_i - o_y, p_x + v_x t_i - o_x))^2`,
+initialised by a coarse grid search over range/course/speed and refined by
+Gauss–Newton. `PassiveBearingTracker` is the matching recursive Extended
+Kalman Filter for online use, with the relative-bearing measurement model and
+a constant-velocity transition. `tracking_rms_error` reports steady-state
+accuracy.
 
-> **Input:** Initial point $x_0$, step size $\alpha$, tolerance $\epsilon$, max iterations $N_{\max}$
->
-> 1. Initialize $k \leftarrow 0$
-> 2. **While** $k < N_{\max}$ **do:**
->    - Compute gradient $g_k = \nabla f(x_k)$
->    - **If** $\|g_k\|_2 < \epsilon$ **then return** $x_k$ *(converged)*
->    - Update: $x_{k+1} \leftarrow x_k - \alpha \cdot g_k$
->    - $k \leftarrow k + 1$
-> 3. **Return** $x_k$ *(max iterations reached)*
+## Liparus-class tanker capture
 
-## Infrastructure Integration
+`src/the_spy_who_loved_me/tanker_capture.py` models the *Liparus* swallowing
+a submarine as a deterministic geometric-feasibility check plus a
+discrete-event sequence. `clearance_metrics` computes the per-axis margins
+between a `SubmarineSpec` and a `BayConfig` mouth/hold, and
+`classify_clearance` labels the fit `fits` / `tight` / `denied` against a
+required safety margin. `stowage_capacity` is how many submarines the hold
+can stow. `simulate_capture` runs the four-phase operation (approach,
+ingress, hatch-seal, secure), each phase decided by a fixed predicate, and
+returns a `CaptureRun` with a per-phase timeline and final status.
 
-The methodology explicitly bridges theoretical mathematics with production-grade validation through the `infrastructure.scientific` module.
+## Submersible vehicle forensics
 
-### Numerical Stability Analysis
+`src/the_spy_who_loved_me/vehicle_forensics.py` forensically assesses
+whether a road vehicle can be converted to submersible duty.
+`SUBMERSIBLE_REQUIREMENTS` is a traced requirement set (pressure hull,
+watertight seals, ballast, air supply, and optional systems). `assess_conversion`
+scores the spec, `classify_conversion` maps the result to `road-only`,
+`amphibious`, or `submersible`, and `recommend_upgrades` returns the missing
+critical systems as an ordered retrofit list. `buoyancy_status` applies
+Archimedes' principle (`F_b = displacement * rho_water * g` vs weight) to
+classify the as-spec vehicle `floats` / `neutral` / `sinks`.
 
-Rather than writing ad-hoc validation code, the project imports `infrastructure.scientific.stability.check_numerical_stability`. This utility subjects the objective function to a barrage of extreme inputs (NaN, Inf, $\pm 10^{10}$) to calculate a formalized stability score. If this score degrades, the [analysis orchestrator](https://github.com/docxology/template/blob/main/scripts/pipeline/stage_02_analysis.py) execution deliberately aborts, ensuring the methodology cannot enter unrecoverable states.
+## Mission orchestration
 
-### Performance Benchmarking
-
-The analysis exercises [`infrastructure.scientific.benchmarking.benchmark_function`](https://github.com/docxology/template/blob/main/infrastructure/scientific/benchmarking.py) as a runtime diagnostic. Host-dependent timing and memory observations are logged but excluded from tracked evidence. The canonical report records fixed inputs and exact objective values, while the dimensional figure reports deterministic convergence iterations and the proxy $d \times \text{iterations}$; neither surface claims that one host run proves an asymptotic bound.
-
-## Convergence Analysis
-
-For quadratic functions $f(x) = \frac{1}{2}x^T A x - b^T x$ where $A$ is positive definite, the convergence factor becomes [@bertsekas1999nonlinear]:
-
-\begin{equation}
-\label{eq:convergence_factor}
-\rho = \frac{|\lambda_{\max} - \alpha\lambda_{\min}|}{|\lambda_{\min} + \alpha\lambda_{\max}|}
-\end{equation}
-
-Optimal convergence occurs when $\alpha = \frac{2}{\lambda_{\min} + \lambda_{\max}}$, yielding $\rho = \frac{\kappa - 1}{\kappa + 1}$.
-
-## Experimental Setup
-
-### Step Size Analysis
-
-Step sizes are not chosen ad hoc in the manuscript: they are read from `experiment.step_sizes` in `manuscript/config.yaml` and passed through `run_convergence_experiment()` in `src/analysis/` (entry: `scripts/optimization_analysis.py`). The active grid for this build is:
-
-{{CONFIG_STEP_SIZES_BULLETS}}
-
-Labels follow the same agency taxonomy used for plot colours (`_agency_category` in the analysis script): **conservative** (small $\alpha$, slow but stable on $H=I$), **near-optimal** (including $\alpha=1$ where the method reaches $x^\ast$ in one step for this quadratic), **aggressive** ($1 < \alpha < 2$, still linearly contracting in $|x-x^\ast|$ but oscillatory in sign), and **divergent** ($|1-\alpha| \geq 1$).
-
-### Zero-Mock Testing Methodology
-
-The most critical aspect of the project's methodology is its validation framework. The project is governed by a strict Zero-Mock testing policy, evaluated actively by executing `uv run pytest projects/working/bond/the_spy_who_loved_me/tests/` during the infrastructure build phase.
-
-1. **Project tests**: [`projects/working/bond/the_spy_who_loved_me/tests/test_optimizer.py`](../tests/test_optimizer.py) exercises `src/optimizer.py` (typical, edge, boundary, and pathological inputs including NaN/Inf and zero gradients) and, when infrastructure imports succeed, call into `optimization_analysis.py` helpers—without mocks. Suite size: [`docs/_generated/COUNTS.md`](../../../../docs/_generated/COUNTS.md).
-2. **Infrastructure validation**: The repository-level `tests/infra_tests/` suite validates shared template modules (e.g. pipeline and discovery helpers) independently of this project’s manuscript.
-3. **Coverage Gates**: The [GitHub Actions CI workflow](https://github.com/docxology/template/blob/main/.github/workflows/ci.yml) enforces a mandatory ≥90% statement coverage gate on `projects/working/bond/the_spy_who_loved_me/src/` prior to treating the project as build-green.
-
-### Stopping rule and reporting
-
-`gradient_descent()` terminates when $\|\nabla f(x_k)\|$ falls below `experiment.tolerance`, when $k$ reaches `experiment.max_iterations`, or when an objective, gradient, or update becomes non-finite. The boolean `converged` plus `termination_reason` in exported CSV rows distinguish these outcomes. A non-finite candidate is rejected before it enters `objective_history`, preserving the last finite state for reproducible reporting. Downstream, `scripts/z_generate_manuscript_variables.py` aggregates the CSV into `RESULT_*` placeholders so tables and prose cannot drift from the last analysis run.
-
-### Figure generation contract
-
-Each figure in `03_results.md` maps to a generator in `src/figures/` (`generate_convergence_plot`, `generate_step_size_sensitivity_plot`, `generate_convergence_rate_plot`, `generate_complexity_visualization`, `generate_stability_visualization`, `generate_benchmark_visualization`), orchestrated by `src/analysis/` / `scripts/optimization_analysis.py`. Captions in the markdown intentionally name the function and the key parameters (tolerance lines, grids, dimensions) so reviewers can navigate from PDF to code without inferring hidden defaults.
-
-The same generator writes explicit `metadata.alt_text` for every registered
-figure. The alt text states what the visual encodes and preserves the boundary
-between deterministic observations and host-dependent diagnostics. Run the
-opt-in publication migration gate with
-`--require-figure-accessibility` to verify that every referenced figure has
-this metadata before promotion.
-
-## Analysis Pipeline & LaTeX Integration
-
-The automated analysis script leverages [`infrastructure.core.progress`](https://github.com/docxology/template/blob/main/infrastructure/core/progress.py) (`ProgressBar`, `SubStageProgress`) to orchestrate experiments, collect convergence trajectories, and generate publication-quality visualizations seamlessly.
-
-The research template supports advanced LaTeX customization through the `preamble.md` configuration. This is ingested directly by `infrastructure.rendering.latex_utils.py` and `pdf_renderer.py`, automatically linking compiled PGF plots and BibTeX citations. This automated approach ensures an unbreakable chain of custody from raw algorithmic execution to the final rendered manuscript.
+`src/the_spy_who_loved_me/mission.py` adapts the three modules to the frozen
+`bond_api` protocol: it implements `MissionProvider` (brief, recon, plan,
+execute, debrief) with a fixed seed, exposes deterministic results with full
+`Provenance`, and registers the concept functions as gadgets on a
+`GadgetRegistry`.

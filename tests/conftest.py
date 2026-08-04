@@ -1,19 +1,19 @@
-"""Pytest configuration for the_spy_who_loved_me tests."""
+"""LIPARUS test configuration.
+
+Pins matplotlib to a headless backend (so figures render without a display)
+and ensures the package ``src/`` is importable. No mock framework is used
+anywhere in the suite — tests run the real, deterministic algorithms.
+"""
+
+from __future__ import annotations
 
 import os
 import sys
+from pathlib import Path
 
-# Force headless backend for matplotlib in tests
 os.environ.setdefault("MPLBACKEND", "Agg")
 
-# Add src/ AND the repo root to path so the documented per-project pytest command
-# works from a clean environment. The project pyproject's `pythonpath` is
-# project-relative and omits the repo root, so without this the suite cannot import
-# `infrastructure` (tests collect-error). The project lives at
-# projects/templates/<name>/, so the repo root is three levels above ROOT.
-ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-SRC = os.path.join(ROOT, "src")
-REPO_ROOT = os.path.abspath(os.path.join(ROOT, "..", "..", ".."))
-for _path in (REPO_ROOT, SRC):
-    if _path not in sys.path:
-        sys.path.insert(0, _path)
+_PKG_ROOT = Path(__file__).resolve().parents[1]
+_SRC = _PKG_ROOT / "src"
+if str(_SRC) not in sys.path:
+    sys.path.insert(0, str(_SRC))

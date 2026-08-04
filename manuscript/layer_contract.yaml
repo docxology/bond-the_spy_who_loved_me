@@ -1,5 +1,22 @@
-# Code-centric exemplar: optional monorepo adapters only.
-allow_infrastructure_imports:
-  - src/analysis/_infra.py
-  - src/_runtime.py
-  - src/benchmark_support.py
+# LIPARUS layer contract — pure domain core, thin adapter, thin scripts.
+# No module in this package imports `infrastructure`; the only `bond_api`
+# import lives in the mission adapter.
+
+pure_domain_core:  # must stay standalone (no bond_api, no infrastructure)
+  - src/the_spy_who_loved_me/sub_tracking.py
+  - src/the_spy_who_loved_me/tanker_capture.py
+  - src/the_spy_who_loved_me/vehicle_forensics.py
+
+protocol_adapter:  # the only module allowed to import bond_api
+  - src/the_spy_who_loved_me/mission.py
+
+manuscript_hydration:
+  - src/the_spy_who_loved_me/manuscript_variables.py
+
+figures:
+  - src/the_spy_who_loved_me/figures/plots.py
+
+thin_scripts:
+  - scripts/mission_cli.py
+  - scripts/generate_figures.py
+  - scripts/z_generate_manuscript_variables.py

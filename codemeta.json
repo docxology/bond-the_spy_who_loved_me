@@ -13,19 +13,16 @@
       "givenName": "Daniel Ari"
     }
   ],
-  "codeRepository": "https://github.com/docxology/the_spy_who_loved_me",
-  "dateModified": "2026-07-10",
-  "identifier": "10.5281/zenodo.20417136",
+  "dateModified": "2026-08-04",
   "keywords": [
-    "optimization algorithms",
-    "gradient descent",
-    "convergence analysis",
-    "numerical methods",
-    "mathematical programming",
-    "reproducible research",
-    "infrastructure automation"
+    "passive acoustic detection",
+    "bearing-only target motion analysis",
+    "extended Kalman filter",
+    "Liparus-class tanker capture",
+    "submersible vehicle forensics",
+    "deterministic simulation"
   ],
   "license": "https://spdx.org/licenses/MIT",
-  "name": "Convergence Analysis of Gradient Descent Optimization",
-  "version": "2.5.2"
+  "name": "The Spy Who Loved Me: LIPARUS — Special-Agent Mission Software",
+  "version": "0.1.0"
 }

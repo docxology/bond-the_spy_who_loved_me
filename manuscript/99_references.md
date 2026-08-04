@@ -1,10 +1,11 @@
-# References {#sec:references}
+# References
 
-Bibliography lives in [`manuscript/references.bib`](references.bib) and is read by Pandoc during PDF render. The build pipeline invokes Pandoc with `--natbib`, so every `[@key]` citation in the manuscript is rewritten to the appropriate `\cite{}`/`\citep{}`/`\citet{}` LaTeX command and resolved against the bib file.
-
-To validate that `references.bib` is syntactically clean and contains the required fields per entry type:
-
-```bash
-uv run python -m infrastructure.reference.citation.cli validate \
-    projects/working/bond/the_spy_who_loved_me/manuscript/references.bib --strict
-```
+1. Kay, S. M. (1998). *Fundamentals of Statistical Signal Processing:
+   Detection Theory* (Vol. 2). Prentice Hall. [@kay_detection_1998]
+2. Nardone, S. C., & Aidala, V. J. (1981). Observability criteria for
+   bearings-only target motion analysis. *IEEE Transactions on Aerospace and
+   Electronic Systems*, AES-17(2), 162–166. [@nardone_aidala_1981]
+3. Anderson, B. D. O., & Moore, J. B. (1979). *Optimal Filtering*.
+   Prentice Hall. [@anderson_moore_1979]
+4. Rahman, S. (2007). *Naval Architecture and Ocean Engineering*.
+   Springer. [@rahman_2007]

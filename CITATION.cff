@@ -1,22 +1,19 @@
-authors:
-- affiliation: Active Inference Institute
-  family-names: Friedman
-  given-names: Daniel Ari
-  orcid: 0000-0001-6232-9096
 cff-version: 1.2.0
-date-released: '2026-07-10'
-doi: 10.5281/zenodo.20417136
-keywords:
-- optimization algorithms
-- gradient descent
-- convergence analysis
-- numerical methods
-- mathematical programming
-- reproducible research
-- infrastructure automation
-license: MIT
 message: If you use this software, please cite it using the metadata from this file.
-repository-code: https://github.com/docxology/the_spy_who_loved_me
-title: Convergence Analysis of Gradient Descent Optimization
+title: "The Spy Who Loved Me: LIPARUS — Special-Agent Mission Software"
 type: software
-version: 2.5.2
+authors:
+  - family-names: Friedman
+    given-names: Daniel Ari
+    orcid: 0000-0001-6232-9096
+    affiliation: Active Inference Institute
+version: 0.1.0
+date-released: '2026-08-04'
+license: MIT
+keywords:
+  - passive acoustic detection
+  - bearing-only target motion analysis
+  - extended Kalman filter
+  - Liparus-class tanker capture
+  - submersible vehicle forensics
+  - deterministic simulation

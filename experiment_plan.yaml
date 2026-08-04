@@ -1,25 +1,24 @@
 conditions:
-  - name: conservative_step
-    role: reference
-    description: "Stable gradient-descent step below the spectral bound."
-  - name: near_optimal_step
+  - name: passive_tracking
     role: proposed
-    description: "Template-recommended step near the stable convergence region."
-  - name: aggressive_step
+    description: "Maneuvering-ownship bearing-only TMA recovers target position/velocity within a bounded error."
+  - name: liparus_capture
+    role: reference
+    description: "Deterministic 4-phase capture succeeds iff clearance and seal predicates hold."
+  - name: vehicle_conversion
     role: variant
-    description: "Stress condition near or above the stability boundary."
+    description: "Requirement-traceable conversion readiness classification across road/amphibious/submersible grades."
 metrics:
   primary:
-    name: objective_value
+    name: track_position_error_m
     direction: minimize
-protocol: "Run the deterministic quadratic optimization sweep with identical initialization, seeds, tolerance, and iteration cap across all declared step-size conditions."
+  secondary:
+    - name: capture_success
+      direction: maximize
+    - name: conversion_readiness_score
+      direction: maximize
+protocol: "Run the deterministic canonical scenarios with fixed seeds and tolerance; assert convergence/feasibility predicates; expose results through the frozen bond_api MissionProvider."
 expected_figures:
-  - fig:convergence_plot
-  - fig:performance_benchmark
-  - fig:step_size_sensitivity
-expected_tables:
-  - tbl:optimization_results
-baselines:
-  - conservative_step
-ablations:
-  - aggressive_step
+  - fig:bearing_track
+  - fig:capture_feasibility
+  - fig:conversion_readiness
