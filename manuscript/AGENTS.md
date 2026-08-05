@@ -41,6 +41,8 @@ Reference figures by Pandoc-crossref label, never a hardcoded number:
 | Label | File |
 |---|---|
 | `fig:bearing_track` | `output/figures/bearing_track.png` |
+| `fig:beamforming_response` | `output/figures/beamforming_response.png` |
+| `fig:sonar_detection_range` | `output/figures/sonar_detection_range.png` |
 | `fig:capture_feasibility` | `output/figures/capture_feasibility.png` |
 | `fig:conversion_readiness` | `output/figures/conversion_readiness.png` |
 

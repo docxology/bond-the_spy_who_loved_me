@@ -11,8 +11,11 @@ submersible vehicle conversion forensics.
 | Concept | Module | Highlights |
 |---|---|---|
 | Passive acoustic tracking | `src/the_spy_who_loved_me/sub_tracking.py` | Neyman–Pearson detector (Wilson–Hilferty thresholds), bearing-only target motion analysis (batch least-squares + Gauss–Newton), Extended Kalman Filter |
+| Underwater acoustics | `src/the_spy_who_loved_me/acoustics.py` | Thorp absorption, transmission loss, passive sonar equation, detection-range solve, Mackenzie sound speed |
+| Beamforming | `src/the_spy_who_loved_me/beamforming.py` | ULA steering vectors, conventional beamformer, bearing estimation, Cramer–Rao bound |
 | Liparus capture | `src/the_spy_who_loved_me/tanker_capture.py` | Exact clearance geometry, discrete-event capture (approach → ingress → seal → secure), stowage capacity |
 | Vehicle forensics | `src/the_spy_who_loved_me/vehicle_forensics.py` | Requirement traceability, readiness classification, Archimedean buoyancy |
+| Pressure-hull forensics | `src/the_spy_who_loved_me/hull_forensics.py` | Hoop stress, elastic buckling, collapse depth, ballast volume |
 | Mission | `src/the_spy_who_loved_me/mission.py` | Frozen `bond_api.MissionProvider` + gadget registry |
 
 Everything is deterministic (fixed seeds, no mocks), and every number in the

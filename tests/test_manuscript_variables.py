@@ -40,7 +40,7 @@ class TestGenerateVariables:
         v = generate_variables(require_outputs=True)
         assert v["LIPARUS_CODENAME"] == "LIPARUS"
         assert v["LIPARUS_IDENTITY"] == "THE_SPY_WHO_LOVED_ME"
-        assert v["NUM_CONCEPT_MODULES"] == "3"
+        assert v["NUM_CONCEPT_MODULES"] == "6"
         for key in (
             "SUB_NUM_BEARINGS",
             "SUB_TRACK_POS_ERR_M",
@@ -48,12 +48,22 @@ class TestGenerateVariables:
             "TANKER_CAPTURE_TIME_S",
             "FORENSICS_SCORE",
             "FORENSICS_CLASS",
+            "ACO_DETECTION_RANGE_M",
+            "ACO_SOUND_SPEED_M_S",
+            "BEAM_BEARING_ERR_DEG",
+            "BEAM_CRB_DEG",
+            "HULL_COLLAPSE_DEPTH_M",
+            "HULL_SAFETY_FACTOR",
+            "BALLAST_VOLUME_L",
         ):
             assert key in v and v[key]
 
     def test_metrics_are_real_numbers(self) -> None:
         v = generate_variables()
         assert float(v["SUB_TRACK_POS_ERR_M"]) < 250.0  # canonical TMA converges
+        assert float(v["ACO_DETECTION_RANGE_M"]) > 0.0
+        assert float(v["HULL_SAFETY_FACTOR"]) >= 1.5
+        assert v["HULL_FEASIBLE"] == "yes"
 
 
 class TestCrossReference:

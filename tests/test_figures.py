@@ -4,12 +4,15 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from the_spy_who_loved_me import SonarBudget, array_snapshot
 from the_spy_who_loved_me.figures import (
     FIGURES_DIR,
     build_all_figures,
+    plot_beamforming_response,
     plot_bearing_track,
     plot_capture_feasibility,
     plot_conversion_readiness,
+    plot_sonar_detection_range,
 )
 from the_spy_who_loved_me.sub_tracking import estimate_tma, simulate_target_track
 from the_spy_who_loved_me.tanker_capture import BayConfig
@@ -18,7 +21,13 @@ from the_spy_who_loved_me.vehicle_forensics import VehicleSpec
 
 def test_build_all_figures() -> None:
     built = build_all_figures()
-    assert set(built) == {"bearing_track", "capture_feasibility", "conversion_readiness"}
+    assert set(built) == {
+        "bearing_track",
+        "beamforming_response",
+        "capture_feasibility",
+        "conversion_readiness",
+        "sonar_detection_range",
+    }
     for name, path in built.items():
         assert Path(path).is_file()
         assert Path(path).stat().st_size > 0
@@ -29,6 +38,21 @@ def test_bearing_track_fig() -> None:
     track = simulate_target_track(300.0, 10.0, 25.0, 90.0, 0.5, seed=3)
     sol = estimate_tma(track.time_s, track.bearings_rad, track.ownship)
     path = plot_bearing_track(track, sol, filename="test_bearing.png")
+    assert Path(path).is_file()
+    path.unlink()
+
+
+def test_beamforming_fig() -> None:
+    snap = array_snapshot(0.5, 0.5, 8, 1.0, 0.1, 11)
+    path = plot_beamforming_response(snap, 0.5, 30.0, filename="test_beam.png")
+    assert Path(path).is_file()
+    path.unlink()
+
+
+def test_sonar_range_fig() -> None:
+    path = plot_sonar_detection_range(
+        SonarBudget(160.0, 70.0, 20.0, 10.0), 400.0, filename="test_sonar.png"
+    )
     assert Path(path).is_file()
     path.unlink()
 

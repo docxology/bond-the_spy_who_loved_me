@@ -1,21 +1,23 @@
 """LIPARUS — the BOND-API mission provider for The Spy Who Loved Me (1977).
 
 This is the thin adapter between the pure domain core
-(:mod:`src.the_spy_who_loved_me.sub_tracking`, ``tanker_capture``,
-``vehicle_forensics``) and the FROZEN ``bond_api`` mission protocol. It
-implements the full lifecycle — brief → recon → plan → execute → debrief —
-by running the real, deterministic domain algorithms, and registers the
+(:mod:`src.the_spy_who_loved_me.{sub_tracking,tanker_capture,
+vehicle_forensics,acoustics,beamforming,hull_forensics}`) and the FROZEN
+``bond_api`` mission protocol. It implements the full lifecycle — brief →
+recon → plan → execute → debrief — by running the real, deterministic
+domain algorithms via the single canonical scenario
+(:func:`the_spy_who_loved_me.scenario.run_canonical`), and registers the
 concept gadgets on a :class:`bond_api.registry.GadgetRegistry` at import
 time so the fleet coordinator can discover them.
 
 Per the protocol contract, this module exposes ``MissionProvider`` at module
 top level under a stable name; discovery imports ``<slug>.mission`` and
-instantiates it.
+instantiates it. The public shape (class, methods, module-level ``GADGETS``)
+is frozen and must not change.
 """
 
 from __future__ import annotations
 
-import numpy as np
 from bond_api.protocol import (
     Asset,
     Constraint,
@@ -31,106 +33,28 @@ from bond_api.protocol import (
 )
 from bond_api.registry import GadgetRegistry
 
+from .acoustics import SonarBudget, detection_range_m
+from .beamforming import array_snapshot, estimate_bearing_deg
+from .hull_forensics import collapse_depth_m, design_safety_factor
+from .scenario import SEED, run_canonical
 from .sub_tracking import detect_contract, estimate_tma, simulate_signal, simulate_target_track
-from .tanker_capture import (
-    BayConfig,
-    SubmarineSpec,
-    classify_clearance,
-    simulate_capture,
-    stowage_capacity,
-)
-from .vehicle_forensics import VehicleSpec, assess_conversion
+from .tanker_capture import simulate_capture
+from .vehicle_forensics import assess_conversion
 
 __all__ = ["GADGETS", "MissionProvider"]
 
 #: Package identity mirroring ``manuscript/config.yaml``.
 PACKAGE_VERSION = "0.1.0"
-SEED = 11
 CODENAME = "LIPARUS"
 FILM = "the_spy_who_loved_me"
-
-#: Canonical scenario parameters — deterministic, shared with manuscript metrics.
-_BAY = BayConfig(mouth_width_m=16.0, mouth_height_m=14.0, hold_length_m=140.0, clearance_m=1.5)
-_SUB = SubmarineSpec(length_m=72.0, beam_m=8.0, depth_m=7.0)
-_VEHICLE = VehicleSpec(
-    "Lotus-Esprit-grade submersible",
-    dry_mass_kg=1800.0,
-    displacement_m3=2.0,
-    systems={
-        "pressure_hull": True,
-        "watertight_seals": True,
-        "ballast_system": True,
-        "air_supply": True,
-        "underwater_thrust": True,
-        "navigation_sonar": True,
-    },
-)
-
-
-def _run_domain_workload() -> dict[str, object]:
-    """Execute the four concept algorithms and return their real, deterministic results.
-
-    Detection uses a synthesised high-SNR contact; tracking runs the canonical
-    EKF scenario; capture simulates the Liparus swallow; forensics assesses
-    the Esprit-grade conversion.
-    """
-    # 1. Passive acoustic detection — high-SNR tonal in seeded noise.
-    signal = simulate_signal(duration_s=2.0, fs=8000, target_snr_db=12.0, seed=SEED)
-    detection = detect_contract(signal)
-
-    # 2. Bearing-only tracking — canonical scenario, TMA solution error vs truth.
-    track = simulate_target_track(
-        duration_s=600.0,
-        dt=10.0,
-        target_speed_m_s=25.0,
-        target_course_deg=90.0,
-        bearing_noise_deg=0.5,
-        seed=SEED,
-    )
-    sol = estimate_tma(track.time_s, track.bearings_rad, track.ownship)
-    # Position error of the recovered initial position against truth at t=0.
-    pos_err = float(np.linalg.norm(sol.position0 - track.truth[0]))
-    vel_err = float(
-        np.linalg.norm(
-            sol.velocity
-            - (
-                track.speed_m_s
-                * np.asarray(
-                    [np.cos(np.radians(track.course_deg)), np.sin(np.radians(track.course_deg))]
-                )
-            )
-        )
-    )
-
-    # 3. Liparus capture.
-    capture = simulate_capture(_SUB, _BAY)
-
-    # 4. Vehicle forensics.
-    forensics = assess_conversion(_VEHICLE)
-
-    return {
-        "detected": detection.detected,
-        "detection_margin_db": round(detection.margin_db, 2),
-        "track_pos_err_m": round(pos_err, 1),
-        "track_vel_err_m_s": round(vel_err, 1),
-        "track_num_bearings": track.num_measurements,
-        "track_residual_rms_rad": round(sol.residual_rms_rad, 4),
-        "capture_clearance": classify_clearance(_SUB, _BAY),
-        "capture_success": capture.success,
-        "capture_time_s": round(capture.total_time_s, 1),
-        "capture_stowage": stowage_capacity(_SUB, _BAY),
-        "forensics_class": forensics.classification.value,
-        "forensics_score": round(forensics.score, 2),
-        "forensics_missing_critical": len(forensics.missing_critical),
-    }
 
 
 class MissionProvider:  # noqa: N801 — class name fixed by the discovery contract
     """Deterministic BOND-API mission provider for LIPARUS.
 
-    ``execute`` runs the real domain workload (detection, tracking, capture,
-    forensics) with a fixed seed and no wall-clock dependence, and returns
-    the measured results with full provenance.
+    ``execute`` runs the six-concept canonical workload with a fixed seed and
+    no wall-clock dependence, and returns the measured results with full
+    provenance.
     """
 
     film = FILM
@@ -141,14 +65,14 @@ class MissionProvider:  # noqa: N801 — class name fixed by the discovery contr
             film=self.film,
             codename=CODENAME,
             objectives=(
-                "detect and track a passive-acoustic contact",
-                "simulate a Liparus-Class tanker capture and verify vehicle conversion",
+                "detect, localise and track a passive-acoustic contact",
+                "simulate a Liparus-Class tanker capture, verify submersible conversion and hull viability",
             ),
             assets=(
                 Asset(
                     kind="module",
                     name="sub_tracking",
-                    payload={"algorithms": ["energy_detector", "ekf_bearing_tracking"]},
+                    payload={"algorithms": ["energy_detector", "tma", "ekf"]},
                 ),
                 Asset(
                     kind="module", name="tanker_capture", payload={"scenario": "Liparus swallow"}
@@ -158,6 +82,9 @@ class MissionProvider:  # noqa: N801 — class name fixed by the discovery contr
                     name="vehicle_forensics",
                     payload={"subject": "Lotus Esprit conversion"},
                 ),
+                Asset(kind="module", name="acoustics", payload={"model": "passive sonar equation"}),
+                Asset(kind="module", name="beamforming", payload={"array": "uniform linear"}),
+                Asset(kind="module", name="hull_forensics", payload={"subject": "pressure hull"}),
             ),
             constraints=(
                 Constraint(
@@ -171,21 +98,22 @@ class MissionProvider:  # noqa: N801 — class name fixed by the discovery contr
         return ReconReport(
             findings=(
                 Finding(label="goal", detail=request.goal),
-                Finding(label="asset_count", detail="three concept modules available"),
+                Finding(label="asset_count", detail="six concept modules available"),
                 Finding(
                     label="detection_model",
-                    detail="Neyman-Pearson energy detector with Wilson-Hilferty threshold",
+                    detail="Neyman-Pearson energy detector; passive sonar equation; Thorp absorption",
                 ),
                 Finding(
                     label="tracking_model",
-                    detail="extended Kalman filter, constant-velocity target",
+                    detail="bearing-only TMA over a maneuvering ownship; EKF; ULA beamformer",
                 ),
+                Finding(label="hull_model", detail="hoop stress, elastic buckling, ballast volume"),
                 Finding(label="constraints", detail="deterministic execution required"),
             )
         )
 
     def plan(self, brief: MissionBrief) -> MissionPlan:
-        """Plan the five deterministic steps across the four stages."""
+        """Plan the deterministic steps across the six concept stages."""
         return MissionPlan(
             steps=(
                 Step(
@@ -194,21 +122,26 @@ class MissionProvider:  # noqa: N801 — class name fixed by the discovery contr
                     params={"snr_db": 12, "objectives": len(brief.objectives)},
                 ),
                 Step(
-                    name="track", action="run_ekf", params={"scenario": "canonical", "seed": SEED}
+                    name="track", action="run_tma", params={"scenario": "canonical", "seed": SEED}
                 ),
+                Step(name="sonar", action="solve_detection_range", params={"freq_hz": 400}),
+                Step(name="beamform", action="estimate_bearing", params={"array": "ula8"}),
                 Step(name="capture", action="simulate_liparus", params={"submarine": "canonical"}),
                 Step(
                     name="forensics", action="assess_conversion", params={"vehicle": "esprit_grade"}
                 ),
+                Step(name="hull", action="check_collapse_depth", params={"operating_depth_m": 40}),
                 Step(name="verify", action="check_outcome", params={"success": True}),
             )
         )
 
     def execute(self, plan: MissionPlan) -> MissionOutcome:
-        """Run the concept workload and return measured results with provenance."""
-        results = _run_domain_workload()
+        """Run the canonical concept workload and return measured results."""
+        results = run_canonical()
         return MissionOutcome(
-            success=bool(results["detected"] and results["capture_success"]),
+            success=bool(
+                results["detected"] and results["capture_success"] and results["hull_feasible"]
+            ),
             results=results,
             provenance=Provenance(
                 package_version=PACKAGE_VERSION,
@@ -220,12 +153,16 @@ class MissionProvider:  # noqa: N801 — class name fixed by the discovery contr
 
     def debrief(self, outcome: MissionOutcome) -> Debrief:
         """Summarise the mission and record LIPARUS' standing lessons."""
-        results = outcome.results
+        r = outcome.results
         return Debrief(
             outcome=outcome,
             lessons=(
-                f"passive contact detected (margin {results['detection_margin_db']} dB); TMA position error {results['track_pos_err_m']} m over {results['track_num_bearings']} bearings",
-                f"Liparus capture {results['capture_clearance']}; vehicle conversion class {results['forensics_class']}",
+                f"passive contact detected (margin {r['detection_margin_db']} dB); "
+                f"TMA position error {r['track_pos_err_m']} m; beamformer bearing error {r['beam_bearing_err_deg']} deg",
+                f"passive sonar detection range {r['aco_detection_range_m']:.0f} m at {r['aco_sound_speed_m_s']:.0f} m/s; "
+                f"hull collapse depth {r['hull_collapse_depth_m']} m (safety factor {r['hull_safety_factor']})",
+                f"Liparus capture {r['capture_clearance']}; vehicle conversion class {r['forensics_class']}; "
+                f"required ballast {r['ballast_volume_l']} L",
                 "deterministic provenance is mandatory for every outcome",
             ),
         )
@@ -238,7 +175,15 @@ GADGETS.register(
     {
         "detect_contract": detect_contract,
         "simulate_target_track": simulate_target_track,
+        "estimate_tma": estimate_tma,
+        "simulate_signal": simulate_signal,
         "simulate_capture": simulate_capture,
         "assess_conversion": assess_conversion,
+        "detection_range_m": detection_range_m,
+        "array_snapshot": array_snapshot,
+        "estimate_bearing_deg": estimate_bearing_deg,
+        "collapse_depth_m": collapse_depth_m,
+        "design_safety_factor": design_safety_factor,
+        "SonarBudget": SonarBudget,
     },
 )

@@ -15,6 +15,12 @@ this tree.
   clearance swallowing a 72 m submarine.
 * **Vehicle forensics**: a Lotus-Esprit-grade spec (1800 kg, 2.0 m^3
   displacement) with the critical submersible systems fitted.
+* **Passive sonar**: a 160 dB source against a 70 dB noise floor and 20 dB
+  array directivity at 400 Hz; sound speed at 10 °C / 35 PSU at the surface.
+* **Beamforming**: an 8-element half-wavelength ULA observing a 30° bearing
+  at 20 dB SNR (seeded snapshot).
+* **Pressure hull**: a 0.8 m radius, 20 mm steel (350 MPa yield) cylinder
+  operating at 40 m depth.
 
 ## Mission identity
 

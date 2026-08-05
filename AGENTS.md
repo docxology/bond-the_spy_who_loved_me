@@ -1,6 +1,6 @@
 # the_spy_who_loved_me — LIPARUS (The Spy Who Loved Me, 1977)
 
-**PROJECT BOND film package** — special-agent mission software exposing three
+**PROJECT BOND film package** — special-agent mission software exposing six
 deterministic domain concepts to the BOND fleet through the frozen `bond_api`
 mission protocol. Local-only working tree (no remote, never push).
 
@@ -21,11 +21,15 @@ mission protocol. Local-only working tree (no remote, never push).
 | `src/the_spy_who_loved_me/sub_tracking.py` | Pure domain core — passive acoustic detection + bearing-only tracking. No `bond_api`/`infrastructure` imports. |
 | `src/the_spy_who_loved_me/tanker_capture.py` | Pure domain core — Liparus swallowing-submarine simulation. Standalone. |
 | `src/the_spy_who_loved_me/vehicle_forensics.py` | Pure domain core — submersible conversion forensics. Standalone. |
+| `src/the_spy_who_loved_me/acoustics.py` | Pure domain core — underwater propagation + passive sonar equation. Standalone. |
+| `src/the_spy_who_loved_me/beamforming.py` | Pure domain core — ULA beamforming + bearing estimation. Standalone. |
+| `src/the_spy_who_loved_me/hull_forensics.py` | Pure domain core — pressure-hull collapse + ballast analysis. Standalone. |
+| `src/the_spy_who_loved_me/scenario.py` | Canonical single source of truth consumed by `mission` and `manuscript_variables`. |
 | `src/the_spy_who_loved_me/manuscript_variables.py` | `{{TOKEN}}` hydration from `manuscript/config.yaml` + live domain-metric runs. |
 | `src/the_spy_who_loved_me/mission.py` | Thin `bond_api` adapter: `MissionProvider` implementation + `GadgetRegistry` registration. |
 | `scripts/` | Thin orchestrators (CLIs + manuscript/figure generation). |
 
-The three concept modules are infrastructure-free and importable *without*
+The six concept modules are infrastructure-free and importable *without*
 `bond_api`; only `mission.py` (the adapter) imports the protocol, so the pure
 core keeps working if the path dependency ever fails.
 
@@ -42,6 +46,16 @@ core keeps working if the path dependency ever fails.
 3. **Submersible vehicle forensics** (`vehicle_forensics.py`) — requirement
    traceability, readiness scoring/classification, and Archimedean buoyancy
    feasibility for Lotus-Esprit-grade conversions.
+4. **Underwater acoustics & passive sonar** (`acoustics.py`) — Thorp
+   absorption, geometric-spreading transmission loss, the passive sonar
+   equation, a monotone-bisection detection-range solve, and the Mackenzie
+   sound-speed equation.
+5. **ULA beamforming** (`beamforming.py`) — steering vectors, the conventional
+   delay-and-sum beamformer, peak-search bearing estimation, and the
+   Cramer–Rao bound on bearing precision.
+6. **Pressure-hull & ballast forensics** (`hull_forensics.py`) — hoop stress,
+   long-cylinder elastic buckling, governing collapse pressure/depth,
+   design safety factor, and Archimedean ballast volume for neutral buoyancy.
 
 ## Mission protocol
 

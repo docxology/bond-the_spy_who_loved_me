@@ -19,6 +19,8 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 
+from ..acoustics import SonarBudget, detection_range_m  # noqa: E402
+from ..beamforming import array_snapshot, estimate_bearing_deg  # noqa: E402
 from ..sub_tracking import TrackSimulation, TrackSolution  # noqa: E402
 from ..tanker_capture import BayConfig, SubmarineSpec, clearance_metrics  # noqa: E402
 from ..vehicle_forensics import (  # noqa: E402
@@ -32,6 +34,8 @@ __all__ = [
     "plot_bearing_track",
     "plot_capture_feasibility",
     "plot_conversion_readiness",
+    "plot_beamforming_response",
+    "plot_sonar_detection_range",
 ]
 
 #: The project root (three levels up from ``figures/plots.py``).
@@ -175,12 +179,94 @@ def plot_conversion_readiness(
     return out
 
 
-def build_all_figures() -> dict[str, Path]:
-    """Render the three concept figures and return a path map.
+def plot_beamforming_response(
+    snapshot: np.ndarray,
+    d_over_lambda: float,
+    true_bearing_deg: float,
+    filename: str = "beamforming_response.png",
+) -> Path:
+    """Plot the ULA beamformer power response vs bearing.
 
-    The tracking figure uses a canonical seeded scenario and its matched EKF
-    estimate; the capture and readiness figures use representative scenario
-    data. All outputs are deterministic.
+    ``snapshot`` is a complex array snapshot; the conventional beamformer is
+    scanned across ``[-90, 90]`` degrees and the normalised power is plotted,
+    together with the true bearing and the scan-peak estimate.
+    """
+    out = _ensure_figures_dir() / filename
+    result = estimate_bearing_deg(snapshot, d_over_lambda)
+    powers = result.powers
+    norm = powers / float(powers.max()) if float(powers.max()) > 0.0 else powers
+    fig, ax = plt.subplots(figsize=(8, 5))
+    ax.plot(result.scan, norm, color="tab:blue", lw=2)
+    ax.axvline(
+        true_bearing_deg,
+        color="tab:green",
+        ls="--",
+        lw=1.5,
+        label=f"true {true_bearing_deg:.0f} deg",
+    )
+    ax.axvline(
+        result.bearing_deg,
+        color="tab:red",
+        ls=":",
+        lw=2,
+        label=f"estimate {result.bearing_deg:.1f} deg",
+    )
+    ax.set_xlabel("bearing from broadside (deg)")
+    ax.set_ylabel("normalised beam power")
+    ax.set_title(f"ULA beamformer response — {result.n_elements} elements")
+    ax.legend(loc="best")
+    ax.grid(alpha=0.3)
+    fig.tight_layout()
+    fig.savefig(out, dpi=300)
+    plt.close(fig)
+    return out
+
+
+def plot_sonar_detection_range(
+    budget: SonarBudget,
+    freq_hz: float,
+    sl_range: tuple[float, float] = (120.0, 200.0),
+    filename: str = "sonar_detection_range.png",
+) -> Path:
+    """Plot passive-sonar detection range as a function of source level.
+
+    Sweeps the canonical budget's source level over ``sl_range`` and solves
+    the detection-range equation for each, showing how much range a stronger
+    contact buys.
+    """
+    out = _ensure_figures_dir() / filename
+    sl_lo, sl_hi = sl_range
+    sls = np.linspace(sl_lo, sl_hi, 41)
+    ranges = np.array(
+        [
+            detection_range_m(
+                SonarBudget(
+                    sl_db=float(sl), nl_db=budget.nl_db, di_db=budget.di_db, dt_db=budget.dt_db
+                ),
+                freq_hz,
+            ).range_m
+            for sl in sls
+        ],
+        dtype=float,
+    )
+    fig, ax = plt.subplots(figsize=(8, 5))
+    ax.plot(sls, ranges / 1000.0, color="tab:blue", lw=2)
+    ax.set_xlabel("source level (dB re 1 uPa)")
+    ax.set_ylabel("detection range (km)")
+    ax.set_title(f"Passive sonar detection range vs source level ({freq_hz:.0f} Hz)")
+    ax.grid(alpha=0.3)
+    fig.tight_layout()
+    fig.savefig(out, dpi=300)
+    plt.close(fig)
+    return out
+
+
+def build_all_figures() -> dict[str, Path]:
+    """Render the five concept figures and return a path map.
+
+    The tracking, beamforming and sonar figures use canonical seeded
+    scenarios; the capture and readiness figures use representative data.
+    All outputs are deterministic.
     """
     from ..sub_tracking import estimate_tma, simulate_target_track
 
@@ -193,8 +279,13 @@ def build_all_figures() -> dict[str, Path]:
         seed=11,
     )
     solution = estimate_tma(track.time_s, track.bearings_rad, track.ownship)
+    beam_snapshot = array_snapshot(0.5235987755982988, 0.5, 8, 1.0, 0.1, 11)
     return {
         "bearing_track": plot_bearing_track(track, solution),
+        "beamforming_response": plot_beamforming_response(beam_snapshot, 0.5, 30.0),
+        "sonar_detection_range": plot_sonar_detection_range(
+            SonarBudget(sl_db=160.0, nl_db=70.0, di_db=20.0, dt_db=10.0), 400.0
+        ),
         "capture_feasibility": plot_capture_feasibility(
             [(64.0, 6.8, 6.0), (80.0, 10.0, 9.0), (95.0, 12.5, 11.0), (120.0, 16.0, 14.0)],
             BayConfig(

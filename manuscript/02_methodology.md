@@ -59,10 +59,45 @@ critical systems as an ordered retrofit list. `buoyancy_status` applies
 Archimedes' principle (`F_b = displacement * rho_water * g` vs weight) to
 classify the as-spec vehicle `floats` / `neutral` / `sinks`.
 
+## Underwater acoustics and the passive sonar equation
+
+`src/the_spy_who_loved_me/acoustics.py` puts numbers on the *medium* the
+Liparus and its quarry move through. `thorp_absorption` implements the Thorp
+(1967) seawater absorption coefficient, ``transmission_loss`` combines
+geometric spreading with absorption to give ``TL(r) = n*10*log10(r) +
+alpha*r``, and `sound_speed_m_s` implements the Mackenzie (1981) equation.
+The passive sonar equation ``SNR = SL - TL - (NL - DI) - DT``
+(`passive_sonar_equation`) is the detection budget, and
+`detection_range_m` solves for the maximum detectable range by monotone
+bisection of the strictly-increasing transmission loss.
+
+## Uniform-linear-array beamforming
+
+`src/the_spy_who_loved_me/beamforming.py` turns the array's raw snapshots
+into a bearing. `steering_vector` gives the plane-wave phase progression
+``a(theta) = exp(-j 2 pi (d/lambda) k sin(theta))``; `array_snapshot`
+produces a deterministic seeded snapshot; the conventional (delay-and-sum)
+beamformer ``P(theta) = |a(theta)^H x|^2`` (`beam_power`) is scanned by
+`estimate_bearing_deg` to locate the contact. `cramer_rao_bearing_std_deg`
+reports the Cramer-Rao lower bound on the bearing estimate — the theoretical
+floor the estimator cannot beat (Van Trees, *Optimum Array Processing*).
+
+## Pressure-hull and ballast forensics
+
+`src/the_spy_who_loved_me/hull_forensics.py` checks that the converted
+vehicle can actually dive. `hoop_stress_pa` evaluates the circumferential
+stress ``sigma = p r / t``; `elastic_buckling_pressure_pa` gives the
+long-cylinder buckling pressure ``p_cr = E (t/r)^3 / (4(1-nu^2))`` and
+`yield_pressure_pa` the strength limit ``p_y = sigma_y t / r``;
+`collapse_depth_m` is the governing (minimum) collapse pressure expressed as
+a depth in seawater. `ballast_volume_m3` applies Archimedes to find the
+flood-water volume needed for neutral buoyancy — the threshold between a
+road car and a submarine.
+
 ## Mission orchestration
 
-`src/the_spy_who_loved_me/mission.py` adapts the three modules to the frozen
-`bond_api` protocol: it implements `MissionProvider` (brief, recon, plan,
-execute, debrief) with a fixed seed, exposes deterministic results with full
-`Provenance`, and registers the concept functions as gadgets on a
-`GadgetRegistry`.
+`src/the_spy_who_loved_me/mission.py` adapts the six domain modules to the
+frozen `bond_api` protocol: it implements `MissionProvider` (brief, recon,
+plan, execute, debrief) with a fixed seed, exposes deterministic results
+(with a validated collapse-depth safety factor) with full `Provenance`, and
+registers the concept functions as gadgets on a `GadgetRegistry`.

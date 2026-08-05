@@ -6,6 +6,10 @@ pure_domain_core:  # must stay standalone (no bond_api, no infrastructure)
   - src/the_spy_who_loved_me/sub_tracking.py
   - src/the_spy_who_loved_me/tanker_capture.py
   - src/the_spy_who_loved_me/vehicle_forensics.py
+  - src/the_spy_who_loved_me/acoustics.py
+  - src/the_spy_who_loved_me/beamforming.py
+  - src/the_spy_who_loved_me/hull_forensics.py
+  - src/the_spy_who_loved_me/scenario.py
 
 protocol_adapter:  # the only module allowed to import bond_api
   - src/the_spy_who_loved_me/mission.py

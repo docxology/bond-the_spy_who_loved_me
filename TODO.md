@@ -4,6 +4,32 @@ Forward-only backlog for the LIPARUS film package. Kept current as built;
 declared integration points are explicit so later BOND phases can bind
 without rework.
 
+## Deep improvement (phase-4, current)
+
+Three new deterministic domain modules were added, deepening the submarine
+tracking and marine-forensics payload behind an unchanged `MissionProvider`:
+
+- `acoustics.py` — Thorp (1967) absorption, geometric-spreading transmission
+  loss, the passive sonar equation (`passive_sonar_equation`), a monotone
+  bisection detection-range solve, and the Mackenzie (1981) sound-speed
+  equation.
+- `beamforming.py` — ULA steering vectors, conventional delay-and-sum
+  beamformer, peak-search bearing estimation, and the Cramer-Rao bound on
+  bearing precision.
+- `hull_forensics.py` — hoop stress, long-cylinder elastic buckling, the
+  governing collapse pressure/depth, design safety factor, and Archimedean
+  ballast volume for neutral buoyancy.
+- `scenario.py` — canonical single source of truth (`run_canonical`) shared
+  by `mission.execute` and `manuscript_variables`, so outcome `results` and
+  manuscript `{{TOKEN}}`s can never disagree. `NUM_CONCEPT_MODULES` is now 6.
+- Two new figures (`beamforming_response`, `sonar_detection_range`); new
+  `{{TOKEN}}`s (ACO_*, BEAM_*, HULL_*, BALLAST_*); references.bib extended
+  with Urick, Thorp, Mackenzie, Van Trees, and Ross.
+
+Gate (measured): `uv run pytest tests/ --cov=src --cov-fail-under=90` at
+≥90% (target 98%+), 0 mocks, 0 skipped; `ruff check`/`format` + `mypy`
+clean; lineage `rg` clean; `git status` clean after commit.
+
 ## Built (phase-1 conversion)
 
 - **Pure domain core** in `src/the_spy_who_loved_me/`:

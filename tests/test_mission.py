@@ -52,9 +52,12 @@ def test_plan() -> None:
     actions = [s.action for s in plan.steps]
     assert actions == [
         "run_detector",
-        "run_ekf",
+        "run_tma",
+        "solve_detection_range",
+        "estimate_bearing",
         "simulate_liparus",
         "assess_conversion",
+        "check_collapse_depth",
         "check_outcome",
     ]
 
@@ -67,6 +70,9 @@ def test_execute_deterministic_results() -> None:
     assert outcome.results["detected"] is True
     assert outcome.results["capture_success"] is True
     assert outcome.results["forensics_class"] == "submersible"
+    assert outcome.results["hull_feasible"] is True
+    assert outcome.results["aco_detection_range_m"] > 0.0
+    assert outcome.results["ballast_volume_l"] > 0.0
     assert outcome.provenance.seed == 11
     assert outcome.provenance.input_hash
     assert outcome.provenance.wall_time_s == 0.0
