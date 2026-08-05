@@ -64,9 +64,15 @@ that actually runs.
 
 ## Lineage
 
-This package was generated from the repository's `template_code_project`
+This package was scaffolded from the repository's generic code-project
 exemplar and then rewritten for its own domain. That lineage is why the
 directory shapes (`src/`, `scripts/`, `tests/`, `manuscript/`, `docs/`) match
-the other BOND packages. No exemplar code remains; where the exemplar name
-appears in this tree it is in prose like this paragraph, explaining the
-origin.
+the other BOND packages.
+
+No exemplar code remains — but exemplar *prose* did, for longer than anyone
+noticed. `STANDALONE.md` was wholesale un-rewritten scaffold text describing
+an optimizer project, and `.agents/skills/…/SKILL.md` described the package
+as a convergence-analysis exemplar. Both are rewritten now, and
+`tests/test_repo_contracts.py::TestNoExemplarBoilerplate` fails on the
+boilerplate itself rather than on one spelling of the exemplar's name — which
+is why the old `rg` lineage check never saw it.

@@ -169,6 +169,117 @@ class TestPassiveBearingTracker:
         est = fk.run(sim)
         assert est.shape == sim.truth.shape
 
+
+class TestEkfActuallyEstimates:
+    """Accuracy assertions, not shape assertions.
+
+    Every earlier EKF test checked ``.shape`` after predict/update, so the
+    filter's arithmetic was invisible under 100% coverage: R was being fed
+    the bearing *standard deviation* where the innovation covariance wants a
+    *variance*, and nothing went red. These tests pin the estimate against
+    truth and pin the R convention directly.
+    """
+
+    def _tracker(self, sigma_rad: float = 5e-3) -> PassiveBearingTracker:
+        return PassiveBearingTracker(
+            [3800.0, 1900.0, 0.0, 25.0],
+            [[1e4, 0, 0, 0], [0, 1e4, 0, 0], [0, 0, 1e2, 0], [0, 0, 0, 1e2]],
+            process_noise=1e-3,
+            measurement_noise_rad=sigma_rad,
+        )
+
+    def test_measurement_noise_is_squared_into_a_variance(self) -> None:
+        sigma = 0.01
+        assert self._tracker(sigma)._r == pytest.approx(sigma**2)
+
+    def test_filter_tracks_the_target(self) -> None:
+        """Steady-state accuracy, expressed against the geometry it ran on.
+
+        The bound is 9% of the mean true target range over the window, which
+        is where the R convention actually shows up: with ``R = sigma**2``
+        (correct) this run measures 8.0% of mean range; with the previous
+        ``R = sigma`` it measures 9.9% and this assertion goes red. The
+        threshold is deliberately set between the two measured values, so
+        reintroducing the units bug fails here.
+        """
+        sim = simulate_target_track(600.0, 10.0, 25.0, 90.0, 0.5, seed=11)
+        est = self._tracker().run(sim)
+        half = sim.num_measurements // 2
+        mean_range_m = float(np.mean(np.linalg.norm(sim.truth[half:] - sim.ownship[half:], axis=1)))
+        rms = tracking_rms_error(est, sim.truth, warmup=half)
+        assert rms < 0.09 * mean_range_m, f"{rms:.1f} m vs mean range {mean_range_m:.1f} m"
+
+    def test_filter_beats_its_own_initial_error(self) -> None:
+        """The estimate must improve on the seed, or it is not filtering."""
+        sim = simulate_target_track(600.0, 10.0, 25.0, 90.0, 0.5, seed=11)
+        fk = self._tracker()
+        seed_state = fk.position.copy()
+        est = fk.run(sim)
+        half = sim.num_measurements // 2
+        seeded = np.repeat(seed_state.reshape(1, 2), sim.num_measurements, axis=0)
+        assert tracking_rms_error(est, sim.truth, warmup=half) < tracking_rms_error(
+            seeded, sim.truth, warmup=half
+        )
+
+
+class TestCoarseSearchEnvelope:
+    """The grid initialiser is bounded, and the bound is load-bearing.
+
+    ``estimate_tma``'s default coarse grid spans 3000-6500 m and 5-35 m/s,
+    which brackets the canonical scenario (4000 m, 25 m/s).
+
+    The bound is *not* a hard cliff, and this is worth stating precisely
+    because it is easy to overclaim in either direction: Gauss-Newton often
+    escapes a badly-seeded start, so a 15 km target is still recovered to
+    293 m with the defaults. What degrades is the far field — at 60 km the
+    default envelope leaves a 25 km position error (42% of range), and
+    widening the range bounds cuts it to 4.9 km. These tests pin both halves
+    of that, so the caveat in the docstring is falsifiable rather than
+    decorative.
+    """
+
+    def _far_target(self, range0_m: float) -> TrackSimulation:
+        return simulate_target_track(
+            600.0, 10.0, 25.0, 90.0, 0.5, seed=11, range0_m=range0_m, bearing0_deg=26.565
+        )
+
+    def test_moderately_outside_the_envelope_still_converges(self) -> None:
+        """15 km is outside the grid and recovered anyway — do not overclaim."""
+        sim = self._far_target(15000.0)
+        sol = estimate_tma(sim.time_s, sim.bearings_rad, sim.ownship)
+        err = float(np.linalg.norm(sol.position0 - sim.truth[0]))
+        assert err < 0.05 * 15000.0, f"expected convergence at 15 km, got {err:.1f} m"
+
+    def test_far_target_is_lost_with_the_default_envelope(self) -> None:
+        sim = self._far_target(60000.0)
+        sol = estimate_tma(sim.time_s, sim.bearings_rad, sim.ownship)
+        err = float(np.linalg.norm(sol.position0 - sim.truth[0]))
+        assert err > 0.20 * 60000.0, f"expected the default envelope to miss, got {err:.1f} m"
+
+    def test_widening_the_envelope_recovers_the_far_target(self) -> None:
+        sim = self._far_target(60000.0)
+        default_err = float(
+            np.linalg.norm(
+                estimate_tma(sim.time_s, sim.bearings_rad, sim.ownship).position0 - sim.truth[0]
+            )
+        )
+        widened = estimate_tma(
+            sim.time_s,
+            sim.bearings_rad,
+            sim.ownship,
+            range_bounds_m=(3000.0, 80000.0),
+            range_step_m=2000.0,
+        )
+        err = float(np.linalg.norm(widened.position0 - sim.truth[0]))
+        assert err < 0.5 * default_err, f"widening should help: {err:.1f} vs {default_err:.1f} m"
+
+    def test_empty_or_invalid_envelope_is_rejected(self) -> None:
+        sim = simulate_target_track(600.0, 10.0, 25.0, 90.0, 0.5, seed=11)
+        with pytest.raises(ValueError, match="must be > 0"):
+            estimate_tma(sim.time_s, sim.bearings_rad, sim.ownship, range_step_m=0.0)
+        with pytest.raises(ValueError, match="envelope is empty"):
+            estimate_tma(sim.time_s, sim.bearings_rad, sim.ownship, range_bounds_m=(5000.0, 4000.0))
+
     def test_run_empty(self) -> None:
         sim = simulate_target_track(20.0, 10.0, 25.0, 90.0, 0.5, seed=11)
         tr = TrackSimulation(

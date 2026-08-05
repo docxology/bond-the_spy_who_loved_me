@@ -19,6 +19,19 @@ approximate. Three reusable capabilities are provided:
   can hold in a single swallow.
 * :func:`simulate_capture` — the discrete-event sequence producing a
   :class:`CaptureRun` with a per-phase timeline and final status.
+
+What is *not* modelled, stated so no reader over-reads the output:
+
+* **Seal integrity has no physics here.** Nothing in this module computes a
+  seal quality, so the hatch-seal phase carries no independent predicate: it
+  succeeds whenever the ingress succeeded. A ``seal_requirement`` field was
+  removed from :class:`BayConfig` in favour of saying so, because it was
+  validated into the range ``[0, 1]`` at construction and then compared
+  against ``1.0`` at run time — a conjunct that could never be False.
+* **Phase durations are declared, not derived.** ``_PHASE_DURATIONS`` is an
+  assumed nominal schedule (see its comment); the reported ``total_time_s``
+  is the sum of the scheduled phases that actually ran, so it varies with
+  *how far the operation got* but never with submarine size or bay geometry.
 """
 
 from __future__ import annotations
@@ -71,16 +84,12 @@ class BayConfig:
     hold_length_m: float
     #: Minimum per-axis clearance the operation demands, metres.
     clearance_m: float = 1.5
-    #: Minimum seal-integrity fraction (0..1) required to close the hatch.
-    seal_requirement: float = 0.9
 
     def __post_init__(self) -> None:
         if self.mouth_width_m <= 0.0 or self.mouth_height_m <= 0.0 or self.hold_length_m <= 0.0:
             raise ValueError("bay dimensions must all be > 0")
         if self.clearance_m < 0.0:
             raise ValueError("clearance_m must be >= 0")
-        if not 0.0 <= self.seal_requirement <= 1.0:
-            raise ValueError("seal_requirement must lie in [0, 1]")
 
 
 @dataclass(frozen=True)
@@ -174,7 +183,13 @@ class CaptureRun:
 
     @property
     def total_time_s(self) -> float:
-        """Wall-clock duration of the operation (last phase end)."""
+        """Elapsed schedule time of the phases that ran (last phase end).
+
+        This is **not** a measured or derived duration: it is the sum of the
+        declared nominal durations in :data:`_PHASE_DURATIONS` for the phases
+        the run reached. It therefore changes when the run aborts early, and
+        does not change with submarine size or bay geometry.
+        """
         if not self.phases:
             return 0.0
         return self.phases[-1].end_s
@@ -208,7 +223,15 @@ def _phase(
     return PhaseRecord(phase=phase, start_s=start, end_s=start + duration, ok=ok, note=note)
 
 
-#: Nominal per-phase durations (seconds) for a textbook operation.
+#: Declared nominal per-phase durations (seconds).
+#:
+#: These four values are **assumptions, not measurements or derivations** —
+#: no timing model, tow speed, or hydrodynamic transit calculation stands
+#: behind them, and no source is cited for them. Nothing in this module makes
+#: a phase duration depend on the submarine or the bay, so any total assembled
+#: from them is a schedule, not a result. Treat a reported ``total_time_s`` as
+#: "the nominal timeline elapsed to this point", and never as evidence about
+#: how long a particular capture would take.
 _PHASE_DURATIONS: dict[CapturePhase, float] = {
     CapturePhase.APPROACH: 240.0,
     CapturePhase.INGRESS: 180.0,
@@ -223,16 +246,24 @@ def simulate_capture(submarine: SubmarineSpec, bay: BayConfig) -> CaptureRun:
     The operation runs through the four stages in order. Each stage's ``ok``
     is decided by a fixed, documented predicate:
 
-    * *approach* always succeeds (the bay is under tow control);
-    * *ingress* succeeds iff the submarine geometrically fits the mouth with
-      the bay's safety clearance (``fits`` classification, not ``tight``);
+    * *approach* always succeeds (the bay is under tow control) — it is a
+      timeline entry, not a test;
+    * *ingress* succeeds iff the mouth clears the submarine's beam **and**
+      depth by at least ``bay.clearance_m``;
     * *hatch-seal* succeeds iff the ingress succeeded (a failed ingress
-      aborts before sealing);
-    * *secure* succeeds iff the hold can clear the intervening length and a
-      seal is achievable at the bay's integrity requirement.
+      aborts before sealing) — no seal-integrity quantity is modelled, so
+      this stage likewise tests nothing of its own;
+    * *secure* succeeds iff the hold clears the submarine's length by at
+      least ``bay.clearance_m``.
+
+    Only two of the four stages therefore carry a discriminating predicate,
+    and both are pure geometry. The run's ``success`` is exactly the *secure*
+    predicate, reached only when ingress passed.
 
     A stage that fails terminates the run (no later phases are recorded) and
-    marks ``success = False``.
+    marks ``success = False``. Phase timings come from the declared nominal
+    schedule in :data:`_PHASE_DURATIONS`; see its comment before reading any
+    duration as a result.
     """
     c = clearance_metrics(submarine, bay)
     records: list[PhaseRecord] = []
@@ -252,15 +283,15 @@ def simulate_capture(submarine: SubmarineSpec, bay: BayConfig) -> CaptureRun:
         "mouth clearance satisfied" if mouth_ok else "mouth clearance insufficient",
     ):
         return CaptureRun(submarine, bay, tuple(records), success=False)
-    # Hatch seal: requires a geometrically successful ingress.
-    add(CapturePhase.HATCH_SEAL, True, "hatch structurally closes")
-    # Secure: only if the sub fits the hold lengthwise and seal integrity met.
-    hold_ok = c.length_clearance_m >= bay.clearance_m and bay.seal_requirement <= 1.0
+    # Hatch seal: requires a geometrically successful ingress. No seal
+    # integrity is computed anywhere in this package, so there is nothing
+    # else for this phase to test.
+    add(CapturePhase.HATCH_SEAL, True, "hatch closes; seal integrity not modelled")
+    # Secure: only if the sub fits the hold lengthwise with the safety margin.
+    hold_ok = c.length_clearance_m >= bay.clearance_m
     add(
         CapturePhase.SECURE,
         hold_ok,
-        "hold stowage and seal integrity verified"
-        if hold_ok
-        else "hold length clearance or seal integrity insufficient",
+        "hold length clearance satisfied" if hold_ok else "hold length clearance insufficient",
     )
     return CaptureRun(submarine, bay, tuple(records), success=hold_ok)

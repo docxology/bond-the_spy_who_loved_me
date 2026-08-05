@@ -18,7 +18,14 @@ metrics:
     - name: conversion_readiness_score
       direction: maximize
 protocol: "Run the deterministic canonical scenarios with fixed seeds and tolerance; assert convergence/feasibility predicates; expose results through the frozen bond_api MissionProvider."
+# The full set produced by ``the_spy_who_loved_me.figures.build_all_figures``
+# and embedded in ``manuscript/03_results.md``. Held equal to the built set by
+# tests/test_repo_contracts.py::TestFigureRegistries — this list was stale for
+# the two acoustics/beamforming figures added in phase 4 with nothing to catch
+# it.
 expected_figures:
   - fig:bearing_track
+  - fig:beamforming_response
   - fig:capture_feasibility
   - fig:conversion_readiness
+  - fig:sonar_detection_range

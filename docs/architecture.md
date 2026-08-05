@@ -46,10 +46,14 @@ spreading to it as `TL(r) = n*10*log10(r) + alpha*r`, with `n = 2` spherical
 or `1` cylindrical; `sound_speed_m_s` is Mackenzie's (1981) nine-term
 equation in temperature, salinity and depth. `figure_of_merit_db` computes
 `FOM = SL - (NL - DI) - DT` and `passive_sonar_equation` subtracts the
-transmission loss from it. `detection_range_m` solves `TL(r) = FOM` by
-bisection — valid because `TL` is strictly increasing in `r`, so the root is
-unique — and returns a `PropagationResult` that reports `converged=False`
-when the contact is inaudible even at one metre.
+transmission loss from it to give the **signal excess** — not the SNR, which
+is larger by the detection threshold and is available separately as
+`signal_to_noise_ratio_db`. (The package called signal excess an SNR in its
+code, prose and test names until that was corrected;
+`PropagationResult.snr_db` became `signal_excess_db`.) `detection_range_m`
+solves `TL(r) = FOM` by bisection — valid because `TL` is strictly increasing
+in `r`, so the root is unique — and returns a `PropagationResult` that
+reports `converged=False` when the contact is inaudible even at one metre.
 
 **`sub_tracking.py`** — the largest module, and the sensor problem proper.
 `detect_contract` is a Neyman–Pearson energy detector: it windows the
@@ -65,8 +69,13 @@ unobservable from a straight-running observer, because scaling the whole
 geometry produces identical bearings. `estimate_tma` does batch
 least-squares target motion analysis over the state `[px, py, vx, vy]`,
 seeded by a coarse range/course/speed grid search and refined by
-Gauss–Newton. `PassiveBearingTracker` is the recursive EKF equivalent for
-online use, and `tracking_rms_error` scores either.
+Gauss–Newton. That grid is a **bounded envelope** (3000-6500 m, 5-35 m/s by
+default, overridable per call) which brackets the canonical scenario, so
+canonical accuracy says nothing about arbitrary geometry — see the caveat in
+[`../AGENTS.md`](../AGENTS.md). `PassiveBearingTracker` is the recursive EKF
+equivalent for online use — its `measurement_noise_rad` is a standard
+deviation and is squared into the covariance `R` — and `tracking_rms_error`
+scores either.
 
 **`beamforming.py`** — where the contact *is*. `steering_vector` is the
 plane-wave phase progression `a(theta) = exp(-j 2 pi (d/lambda) k sin
@@ -82,8 +91,11 @@ computes exact per-axis margins between a `SubmarineSpec` and a `BayConfig`;
 `classify_clearance` labels them `fits` / `tight` / `denied` against the
 required margin; `stowage_capacity` divides the hold. `simulate_capture`
 runs the four-phase discrete-event sequence — approach, ingress, hatch-seal,
-secure — each phase gated by a fixed predicate, returning a `CaptureRun`
-with a per-phase timeline.
+secure — returning a `CaptureRun` with a per-phase timeline. Only *ingress*
+and *secure* carry a discriminating predicate, and both are pure geometry:
+no seal integrity is modelled, and the per-phase durations are declared
+constants rather than a timing model, so the reported total is a schedule
+and not a result.
 
 **`vehicle_forensics.py`** — the paperwork side of the Lotus Esprit.
 `SUBMERSIBLE_REQUIREMENTS` is a traced requirement set of nine systems, four
@@ -92,7 +104,10 @@ satisfied, missing, and unrecognised keys; a system explicitly set to
 `False` and a system omitted entirely are treated identically.
 `classify_conversion` maps the result to `road-only` / `amphibious` /
 `submersible`, `recommend_upgrades` sorts the gaps critical-first, and
-`buoyancy_status` applies Archimedes to classify the as-spec vehicle.
+`buoyancy_status` applies Archimedes to classify the as-spec vehicle, in
+seawater — the same density `hull_forensics` uses, so one vehicle is judged
+in one fluid (this module used fresh water at 1000 kg/m^3 until that was
+fixed).
 
 **`hull_forensics.py`** — the physics side of the same question.
 `hoop_stress_pa` is `sigma = p r / t`; `elastic_buckling_pressure_pa` is the
@@ -128,8 +143,11 @@ for measurements, and reads `[tool.coverage.report] fail_under` out of
 prose is the enforced one. `resolve_manuscript_tree` copies each `NN_*.md`
 section to `output/manuscript/` with tokens substituted and, in strict mode,
 raises on any leftover `{{...}}`. `_canonical_metrics` additionally gates the
-run in strict mode: a contact that was not detected, a non-positive
-detection range, or an infeasible hull each abort rather than render.
+run in strict mode via the pure predicate `check_metrics`: a contact that was
+not detected, a non-positive detection range, or an infeasible hull each
+abort rather than render. It emits no wall-clock value — the persisted
+variable map is byte-identical across regenerations on one interpreter, and
+`PYTHON_VERSION` is the only environment-dependent token.
 
 **`figures/plots.py`** renders five deterministic figures — bearing track,
 sonar detection range, beamformer response, capture feasibility, conversion
@@ -145,7 +163,7 @@ number it reports comes from `run_canonical()`.
 | `brief()` | → `MissionBrief` | Declares film, codename `LIPARUS`, two objectives, one `Asset` per concept module, and a `determinism` `Constraint` |
 | `recon(request)` | `ReconRequest` → `ReconReport` | Echoes the goal and returns `Finding`s naming the detection, tracking and hull models available |
 | `plan(brief)` | `MissionBrief` → `MissionPlan` | Emits eight ordered `Step`s: detect, track, sonar, beamform, capture, forensics, hull, verify |
-| `execute(plan)` | `MissionPlan` → `MissionOutcome` | Calls `run_canonical()` once; `success` is true only when the contact was detected **and** the capture succeeded **and** the hull is feasible; attaches `Provenance` with package version, seed and input hash |
+| `execute(plan)` | `MissionPlan` → `MissionOutcome` | Calls `run_canonical()` once; `success` is true only when the contact was detected **and** the capture succeeded **and** the hull is feasible; attaches `Provenance` with package version, seed, and a SHA-256 input hash over the canonical parameter set (`scenario.canonical_input_hash`) |
 | `debrief(outcome)` | `MissionOutcome` → `Debrief` | Formats four lessons out of the outcome's own `results`, so the summary cannot drift from the run |
 
 `MissionProvider.film` is the package slug, which is how discovery matches
@@ -164,4 +182,14 @@ fleet may invoke directly. Registration happens on import, so importing
 - A metric typed into manuscript prose instead of flowing through
   `manuscript_variables.py`.
 - A constant restated in two places — put it in `scenario.py` and derive.
-- Mocks, or randomness without a fixed seed, anywhere in `tests/`.
+- Mocks, dependency substitution via `monkeypatch.setattr`, or randomness
+  without a fixed seed, anywhere in `tests/`.
+- A conjunct in a predicate that the constructor has already made
+  unfalsifiable.
+- A declared constant reported as though it were measured.
+- A "gate" written as a shell one-liner whose exit status nothing consumes.
+
+The layer contract above is enforced by
+`tests/test_repo_contracts.py::TestLayerContract`, which reads
+`manuscript/layer_contract.yaml`. Before that test existed, no script, test
+or hook read the file at all.

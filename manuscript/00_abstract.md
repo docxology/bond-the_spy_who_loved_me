@@ -10,8 +10,10 @@ uniform-linear-array beamforming, and pressure-hull collapse/ballast
 analysis — exposed to the BOND fleet through a frozen `MissionProvider`
 adapter.
 
-Every result in this manuscript is computed live by the domain core, never
-hand-authored: the tracking pipeline recovers the quarry's position to within
+Every *measured* quantity in this manuscript is computed live by the domain
+core rather than hand-authored, and Section @sec:results marks the one
+reported number that is a declared constant instead — the capture timeline.
+The tracking pipeline recovers the quarry's position to within
 {{SUB_TRACK_POS_ERR_M}} metres of truth, the ULA beamformer resolves the
 contact to within one {{BEAM_SCAN_STEP_DEG}}-degree scan cell of the true
 bearing against a Cramer-Rao floor of {{BEAM_CRB_DEG}} degrees (Section

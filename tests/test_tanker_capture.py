@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 
 from the_spy_who_loved_me.tanker_capture import (
+    _PHASE_DURATIONS,
     BayConfig,
     CapturePhase,
     CaptureRun,
@@ -34,8 +35,6 @@ class TestSpecs:
             BayConfig(0.0, 14.0, 140.0)
         with pytest.raises(ValueError):
             BayConfig(16.0, 14.0, 140.0, clearance_m=-1.0)
-        with pytest.raises(ValueError):
-            BayConfig(16.0, 14.0, 140.0, seal_requirement=1.5)
 
 
 class TestClearance:
@@ -85,7 +84,8 @@ class TestCaptureRun:
             CapturePhase.SECURE,
         ]
         assert all(p.ok for p in run.phases)
-        assert run.total_time_s == pytest.approx(630.0)  # 240+180+90+120
+        # Derived from the declared schedule rather than restating its total.
+        assert run.total_time_s == pytest.approx(sum(_PHASE_DURATIONS.values()))
 
     def test_ingress_failure_aborts(self, bay: BayConfig) -> None:
         # Mouth clearance insufficient (beam too wide for the 1.5m margin).
@@ -108,3 +108,69 @@ class TestCaptureRun:
         run = CaptureRun(SubmarineSpec(72.0, 8.0, 7.0), bay)
         assert run.total_time_s == 0.0
         assert run.as_dict()["total_time_s"] == 0.0
+
+
+class TestReportedTimeIsASchedule:
+    """``total_time_s`` is a declared schedule, and the tests say so.
+
+    The reported duration is the sum of the fixed ``_PHASE_DURATIONS`` for
+    the phases a run reached. Nothing in the module makes it depend on the
+    submarine or the bay, so a test that only checked ``630.0`` on the
+    canonical case would read as a result while pinning a constant. These
+    assertions pin what is actually true: the total tracks *how far the run
+    got*, and is invariant to geometry at equal progress.
+    """
+
+    def test_total_is_the_sum_of_the_phases_that_ran(self, bay: BayConfig) -> None:
+        run = simulate_capture(SubmarineSpec(72.0, 8.0, 7.0), bay)
+        assert run.total_time_s == pytest.approx(sum(p.duration_s for p in run.phases))
+        assert run.total_time_s == pytest.approx(sum(_PHASE_DURATIONS[p.phase] for p in run.phases))
+
+    def test_aborted_run_reports_less_time(self, bay: BayConfig) -> None:
+        full = simulate_capture(SubmarineSpec(72.0, 8.0, 7.0), bay)
+        aborted = simulate_capture(SubmarineSpec(72.0, 15.0, 7.0), bay)  # ingress fails
+        assert len(aborted.phases) < len(full.phases)
+        assert aborted.total_time_s < full.total_time_s
+        assert aborted.total_time_s == pytest.approx(
+            _PHASE_DURATIONS[CapturePhase.APPROACH] + _PHASE_DURATIONS[CapturePhase.INGRESS]
+        )
+
+    def test_time_is_invariant_to_submarine_size(self, bay: BayConfig) -> None:
+        """Two very different submarines, both reaching all four phases."""
+        small = simulate_capture(SubmarineSpec(10.0, 3.0, 3.0), bay)
+        large = simulate_capture(SubmarineSpec(72.0, 8.0, 7.0), bay)
+        assert small.success and large.success
+        assert small.total_time_s == large.total_time_s
+
+    def test_a_failed_capture_still_reports_the_full_schedule(self, bay: BayConfig) -> None:
+        """Failure at *secure* does not shorten the timeline — read it that way."""
+        failed = simulate_capture(SubmarineSpec(139.0, 8.0, 7.0), bay)
+        succeeded = simulate_capture(SubmarineSpec(72.0, 8.0, 7.0), bay)
+        assert failed.success is False
+        assert failed.total_time_s == succeeded.total_time_s
+
+
+class TestSecurePredicateIsGeometryOnly:
+    """The *secure* stage turns on hold-length clearance and nothing else.
+
+    A ``seal_requirement`` field used to add ``and bay.seal_requirement <=
+    1.0`` here, which ``BayConfig.__post_init__`` had already made
+    unfalsifiable. The field is gone; these assertions pin the boundary that
+    remains, on both sides.
+    """
+
+    def test_secure_fails_just_inside_the_margin(self, bay: BayConfig) -> None:
+        # hold 140 m, clearance 1.5 m -> the boundary sits at 138.5 m.
+        assert simulate_capture(SubmarineSpec(138.6, 8.0, 7.0), bay).success is False
+        assert simulate_capture(SubmarineSpec(138.4, 8.0, 7.0), bay).success is True
+
+    def test_secure_note_names_only_the_length(self, bay: BayConfig) -> None:
+        run = simulate_capture(SubmarineSpec(139.0, 8.0, 7.0), bay)
+        assert run.phases[-1].phase == CapturePhase.SECURE
+        assert "seal" not in run.phases[-1].note
+
+    def test_hatch_seal_phase_declares_it_models_no_seal(self, bay: BayConfig) -> None:
+        run = simulate_capture(SubmarineSpec(72.0, 8.0, 7.0), bay)
+        seal = next(p for p in run.phases if p.phase == CapturePhase.HATCH_SEAL)
+        assert seal.ok is True
+        assert "not modelled" in seal.note

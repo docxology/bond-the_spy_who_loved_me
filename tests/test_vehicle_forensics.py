@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import pytest
 
+from the_spy_who_loved_me.hull_forensics import SEAWATER_DENSITY_KG_M3, ballast_volume_m3
 from the_spy_who_loved_me.vehicle_forensics import (
     SUBMERSIBLE_REQUIREMENTS,
+    WATER_DENSITY_KG_M3,
     BuoyancyClass,
     ConversionClass,
     Requirement,
@@ -95,11 +97,45 @@ class TestBuoyancy:
         assert buoyancy_status(5000.0, 2.0) == BuoyancyClass.SINKS
 
     def test_neutral(self) -> None:
-        # mass == displacement * rho (1000) -> balanced.
-        assert buoyancy_status(2000.0, 2.0) == BuoyancyClass.NEUTRAL
+        # mass == displacement * rho (seawater) -> balanced.
+        assert buoyancy_status(2.0 * WATER_DENSITY_KG_M3, 2.0) == BuoyancyClass.NEUTRAL
 
     def test_nonpositive_displacement(self) -> None:
         assert buoyancy_status(1000.0, 0.0) == BuoyancyClass.SINKS
+
+
+class TestOneVehicleOneFluid:
+    """The buoyancy verdict and the ballast figure must use the same medium.
+
+    This module carried a fresh-water 1000 kg/m^3 while ``hull_forensics``
+    computed the same Lotus-Esprit-grade vehicle's ballast volume and
+    collapse depth in seawater at 1025 — one vehicle, one manuscript section,
+    two fluids. The classification happened not to flip for the canonical
+    spec, so nothing caught it.
+    """
+
+    def test_density_is_the_seawater_constant(self) -> None:
+        assert WATER_DENSITY_KG_M3 == SEAWATER_DENSITY_KG_M3
+
+    def test_the_two_verdicts_agree_on_the_canonical_vehicle(self) -> None:
+        """`floats` must mean `needs positive ballast`, in both modules."""
+        mass, displacement = 1800.0, 2.0
+        assert buoyancy_status(mass, displacement) is BuoyancyClass.FLOATS
+        assert ballast_volume_m3(mass, displacement) > 0.0
+
+    def test_the_two_verdicts_agree_on_a_sinker(self) -> None:
+        mass, displacement = 5000.0, 2.0
+        assert buoyancy_status(mass, displacement) is BuoyancyClass.SINKS
+        assert ballast_volume_m3(mass, displacement) < 0.0
+
+    def test_the_sign_change_happens_at_the_same_mass(self) -> None:
+        """A single crossing point, not two — pinned either side of it."""
+        displacement = 2.0
+        neutral_mass = displacement * WATER_DENSITY_KG_M3
+        assert ballast_volume_m3(neutral_mass - 1.0, displacement) > 0.0
+        assert ballast_volume_m3(neutral_mass + 1.0, displacement) < 0.0
+        assert buoyancy_status(neutral_mass * 0.9, displacement) is BuoyancyClass.FLOATS
+        assert buoyancy_status(neutral_mass * 1.1, displacement) is BuoyancyClass.SINKS
 
 
 class TestRecommendations:

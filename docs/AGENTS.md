@@ -15,13 +15,16 @@ tree with **no git remote** — commit here, never push.
 
 These are the properties the gate enforces. Everything else is style.
 
-1. **No mock framework.** No `unittest.mock`, `MagicMock`, `mocker.patch`,
-   or `create_autospec` anywhere in `tests/`. Every test runs the real
-   algorithm on real, generated data. `pytest.MonkeyPatch` appears in
-   exactly one place — `tests/test_manuscript_variables.py`, to degrade a
-   single field of a genuinely-computed metric dict so the strict output
-   gate can be proven to fire — and that is environment isolation, not
-   dependency replacement.
+1. **No mock framework, and no dependency replacement either.** No
+   `unittest.mock`, `MagicMock`, `mocker.patch`, or `create_autospec`
+   anywhere in `tests/`, and no `monkeypatch.setattr` substituting a
+   production callable. Every test runs the real algorithm on real,
+   generated data. The suite briefly carried
+   `monkeypatch.setattr(mv_module, "run_canonical", degenerate)` and
+   defended it as environment isolation; a function being stood in for is a
+   stand-in whatever it is called. The strict output gate is now the pure
+   predicate `manuscript_variables.check_metrics(metrics)`, exercised by
+   handing it a genuine metric dict with one field degraded.
 2. **Determinism.** Fixed seeds (`scenario.SEED`), no untracked RNG, no
    wall-clock in persisted artefacts. `run_canonical() == run_canonical()`
    is a test.
@@ -71,11 +74,29 @@ simply find nothing rather than raise.
 Verify the contract holds:
 
 ```bash
+uv run pytest tests/test_repo_contracts.py::TestLayerContract -v
+```
+
+`TestLayerContract` parses `manuscript/layer_contract.yaml` and checks that
+every listed path exists, that every module under `src/` and `scripts/` is
+covered by exactly one section, that no pure-core file imports `bond_api` or
+`infrastructure`, that the set of `bond_api` importers is within the declared
+adapter/script list, and that nothing anywhere imports `infrastructure`.
+
+Two shell one-liners used to stand here:
+
+```bash
 grep -rln "bond_api" src/the_spy_who_loved_me/ | grep -v "mission.py" \
   || echo "OK — only mission.py references the protocol"
-grep -rn "^from infrastructure\|^import infrastructure" src/ scripts/ \
-  || echo "OK — no infrastructure imports"
 ```
+
+Neither could fail. `grep` exits non-zero when it finds *nothing*, so the
+`|| echo "OK"` branch fired on a clean tree and a violation printed a
+filename while the command still exited 0. Nothing consumed the exit status
+anyway. And until the pytest gate landed, nothing at all read
+`layer_contract.yaml` — `docs/README.md` billed it as "the machine-readable
+statement of which module may import what" while the discipline it encodes
+was enforced only by prose.
 
 ## Change protocol
 
@@ -96,8 +117,27 @@ grep -rn "^from infrastructure\|^import infrastructure" src/ scripts/ \
 
 ## A note on green-by-construction
 
-Two traps have already been found and fixed here; both are worth recognising
-in new work.
+Several traps have already been found and fixed here; all are worth
+recognising in new work.
+
+- A **dead conjunct in a documented predicate**. `simulate_capture`'s secure
+  stage read `length_clearance >= clearance and bay.seal_requirement <= 1.0`
+  while `BayConfig.__post_init__` had already validated `seal_requirement`
+  into `[0, 1]`. The second term could never be false, so the docstring's
+  "and a seal is achievable at the bay's integrity requirement" described a
+  test that did not exist. The field is gone and the predicate is stated as
+  the geometry it is.
+- A **units defect invisible under 100% coverage**. The EKF put a bearing
+  standard deviation into the measurement-*variance* slot. Every EKF test
+  asserted `.shape`, so nothing went red. Shape assertions are not accuracy
+  assertions; `tests/test_sub_tracking.py::TestEkfActuallyEstimates` now
+  bounds the estimate against truth with a threshold that sits between the
+  correct and the buggy behaviour.
+- A **constant reported as a result**. See the capture-timeline caveat in
+  [`../AGENTS.md`](../AGENTS.md).
+- A **fixed literal in a provenance hash**. `input_hash` was
+  `"liparus-mission-input"` — it identified the package, not the inputs, and
+  could not change when the scenario did.
 
 - The canonical beamforming scenario places the true bearing at exactly
   30 degrees, which lands on a node of the 0.5-degree scan grid. The

@@ -64,20 +64,45 @@ unnoticed.
 - [ ] Acceptance: the test fails if a non-deterministic element is
       introduced into a plot.
 
-### 5. `input_hash` in the provenance is a constant string
+### 5. The capture timeline is a declared constant, not a model
 
-`mission.execute` attaches `input_hash="liparus-mission-input"`, a fixed
-literal. It therefore identifies the package, not the inputs, and would not
-change if the canonical scenario changed — which is the one thing an input
-hash exists to detect.
+`tanker_capture._PHASE_DURATIONS` is four uncited numbers with no timing
+model behind them, and the reported `total_time_s` therefore carries no
+information about the submarine or the bay. This is now labelled honestly
+everywhere it appears (module docstring, `03_results.md`, `AGENTS.md`, the
+claim ledger) and pinned as a schedule by
+`tests/test_tanker_capture.py::TestReportedTimeIsASchedule` — but it is
+labelled, not fixed.
 
-- [ ] Hash the actual canonical parameter set (a stable serialisation of the
-      `scenario.py` constants) and use that.
-- [ ] Acceptance: editing any canonical parameter changes the hash;
-      re-running with unchanged parameters does not.
-- [ ] Coordinate with the `bond-api` owners first — if any consumer treats
-      `input_hash` as an opaque package identifier, this needs agreeing
-      across the fleet rather than changing unilaterally.
+- [ ] Either derive phase durations from the geometry (an ingress transit at
+      a stated tow speed, a seal cycle at a stated actuation rate) with the
+      rates cited, or drop the timeline from the results section entirely.
+- [ ] Acceptance: `capture_time_s` changes with submarine length, and each
+      rate that drives it traces to a source.
+
+### 6. Two of the four capture phases test nothing
+
+*approach* always succeeds and *hatch-seal* succeeds whenever ingress did,
+because no seal-integrity quantity exists anywhere in the package. The
+`seal_requirement` field that gave the appearance of a seal predicate has
+been removed rather than left as a dead conjunct.
+
+- [ ] Either model a seal-integrity quantity that can fail (and cite what it
+      is derived from), or collapse the sequence to the two phases that
+      actually decide the outcome.
+- [ ] Acceptance: every phase in the returned timeline has an input that
+      makes it fail.
+
+### 7. The EKF's accuracy bound is empirical, not derived
+
+`TestEkfActuallyEstimates` bounds the steady-state error at 9% of mean target
+range, a threshold chosen to sit between the measured correct behaviour
+(8.0%) and the measured units-bug behaviour (9.9%). It is a real gate, but
+the number is calibrated to observation rather than to theory.
+
+- [ ] Compare the filter's reported covariance against its actual error
+      (a normalised estimation error squared / consistency check) so the
+      bound follows from the filter's own uncertainty claim.
 
 ## Declared integration points
 
@@ -92,6 +117,10 @@ hash exists to detect.
    call it to persist its `MissionOutcome` instead of the current local JSON
    write in `scripts/mission_cli.py`. Acceptance: the outcome record carries
    the same `provenance` block (package_version, seed, input_hash).
+   Note for that conversation: `input_hash` is no longer the fixed literal
+   `"liparus-mission-input"` — it is now a SHA-256 over the canonical
+   parameter set, so any fleet consumer that treated it as an opaque package
+   identifier will see a different (and now varying) value.
 3. **Orchestrator discovery**: `bond-orchestrator` discovers this film by
    slug via `bond_api.discovery`; the provider is exposed at module top
    level in `mission.py` as `MissionProvider` with
@@ -102,10 +131,14 @@ hash exists to detect.
 
 ```bash
 uv run pytest tests/ --cov=src --cov-fail-under=90
-uv run ruff check src/ scripts/ && uv run ruff format --check src/ scripts/
+uv run ruff check src/ scripts/ tests/ && uv run ruff format --check src/ scripts/ tests/
 uv run mypy src/
 uv run python scripts/mission_cli.py full
 uv run python scripts/z_generate_manuscript_variables.py
-rg -n "template[_]code_project" . --glob '!uv.lock' --glob '!.git/**' || echo Clean
 git status --short   # clean after a path-scoped commit
 ```
+
+The documentation gates (lineage, layer contract, versions, figure
+registries, publication identity) are in `tests/test_repo_contracts.py` and
+run with the suite; the `rg`-based lineage one-liner that used to sit here
+could not fail and did not match the boilerplate it was aimed at.

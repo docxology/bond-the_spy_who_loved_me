@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import platform
 import re
-from datetime import datetime, timezone
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -28,6 +28,7 @@ import yaml
 from .scenario import run_canonical
 
 __all__ = [
+    "check_metrics",
     "coverage_floor_pct",
     "generate_variables",
     "load_manuscript_config",
@@ -78,21 +79,31 @@ def coverage_floor_pct(pyproject_path: str | Path | None = None) -> int:
     return int(value)
 
 
+def check_metrics(metrics: Mapping[str, Any]) -> None:
+    """Raise if a canonical metric set is degenerate.
+
+    A pure predicate over an already-computed metric mapping: a contact must
+    be detected, the detection range must be finite and positive, and the
+    hull must survive its operating depth. Keeping it separate from the run
+    is what lets the guard be tested by handing it a real ``run_canonical()``
+    dict with one field degraded — no substitution of ``run_canonical``
+    itself, and so no dependency replacement in the test suite.
+    """
+    if not bool(metrics["detected"]):
+        raise ValueError("canonical contact was not detected — domain core regression")
+    if float(metrics["aco_detection_range_m"]) <= 0.0:
+        raise ValueError("canonical detection range is non-positive — domain core regression")
+    if not bool(metrics["hull_feasible"]):
+        raise ValueError(
+            "canonical hull is not feasible at operating depth — domain core regression"
+        )
+
+
 def _canonical_metrics(require_outputs: bool) -> dict[str, Any]:
     """Run the canonical scenario and gate it when ``require_outputs``."""
     metrics = run_canonical()
     if require_outputs:
-        # The canonical scenario must be non-degenerate: a contact is
-        # detected, a finite detection range is solved, and the hull
-        # survives its operating depth.
-        if not bool(metrics["detected"]):
-            raise ValueError("canonical contact was not detected — domain core regression")
-        if float(metrics["aco_detection_range_m"]) <= 0.0:
-            raise ValueError("canonical detection range is non-positive — domain core regression")
-        if not bool(metrics["hull_feasible"]):
-            raise ValueError(
-                "canonical hull is not feasible at operating depth — domain core regression"
-            )
+        check_metrics(metrics)
     return metrics
 
 
@@ -123,8 +134,14 @@ def generate_variables(
         "LIPARUS_DATE": str(paper.get("date", "")),
         "NUM_CONCEPT_MODULES": str(NUM_CONCEPT_MODULES),
         "COVERAGE_FLOOR_PCT": str(coverage_floor_pct()),
+        # The one environment-dependent token. It is not wall-clock — the
+        # value is fixed for a given interpreter — but it does mean the
+        # persisted variable map is byte-identical *per interpreter* rather
+        # than universally. A ``GENERATION_TIMESTAMP`` token used to sit here
+        # and made every regeneration differ; it was removed because nothing
+        # in the manuscript consumed it and it falsified the determinism
+        # claim in ``manuscript/06_reproducibility.md``.
         "PYTHON_VERSION": platform.python_version(),
-        "GENERATION_TIMESTAMP": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         # sub_tracking
         "SUB_NUM_BEARINGS": str(c["track_num_bearings"]),
         "SUB_TRACK_POS_ERR_M": f"{c['track_pos_err_m']:.1f}",
@@ -141,7 +158,9 @@ def generate_variables(
         "TANKER_MOUTH_HEIGHT_M": f"{c['tanker_mouth_height_m']:.0f}",
         "TANKER_CLEARANCE_M": f"{c['tanker_clearance_m']:.1f}",
         "TANKER_SUB_LENGTH_M": f"{c['tanker_sub_length_m']:.0f}",
+        # A declared schedule sum, not a measurement — see 03_results.md.
         "TANKER_CAPTURE_TIME_S": f"{c['capture_time_s']:.0f}",
+        "TANKER_PHASES_RUN": str(c["capture_phases_run"]),
         "TANKER_STOWAGE": str(c["capture_stowage"]),
         # vehicle_forensics
         "FORENSICS_SCORE": f"{c['forensics_score']:.2f}",
@@ -158,6 +177,7 @@ def generate_variables(
         "ACO_SOURCE_LEVEL_DB": f"{c['aco_source_level_db']:.0f}",
         "ACO_NOISE_LEVEL_DB": f"{c['aco_noise_level_db']:.0f}",
         "ACO_DIRECTIVITY_DB": f"{c['aco_directivity_db']:.0f}",
+        "ACO_DETECTION_THRESHOLD_DB": f"{c['aco_detection_threshold_db']:.0f}",
         "ACO_TEMP_C": f"{c['aco_temp_c']:.0f}",
         "ACO_SALINITY_PSU": f"{c['aco_salinity_psu']:.0f}",
         # beamforming

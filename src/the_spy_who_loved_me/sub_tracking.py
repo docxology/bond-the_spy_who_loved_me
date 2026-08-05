@@ -51,9 +51,6 @@ __all__ = [
     "tracking_rms_error",
 ]
 
-#: Density of seawater, kg/m^3 — the acoustic and buoyancy reference medium.
-SEAWATER_DENSITY_KG_M3 = 1025.0
-
 
 @dataclass(frozen=True)
 class DetectionConfig:
@@ -332,11 +329,32 @@ class TrackSolution:
         }
 
 
+# --- Coarse-search envelope -------------------------------------------------
+#
+# The grid search that initialises :func:`estimate_tma` is a *bounded* search,
+# and these bounds are its declared limits, not universal ones. The candidate
+# initial ranges are 3000, 3500, ... 6500 m (``arange`` excludes the stop) and
+# the candidate speeds are 5, 10, ... 35 m/s. A target outside those envelopes
+# is seeded from the nearest corner of the grid, and how badly that hurts
+# depends on how far outside it is. Measured on the canonical geometry with
+# only ``range0_m`` varied: 15 km recovers to 293 m (2% of range) despite
+# being outside the grid, because Gauss-Newton escapes the poor seed; 60 km
+# leaves a 25 km error (42% of range), which widening the range bounds to
+# 80 km cuts to 4.9 km.
+#
+# So the envelope is a soft limit, not a cliff — but it is a limit, and these
+# defaults comfortably bracket the canonical scenario (4000 m, 25 m/s), which
+# is why canonical performance is not evidence about arbitrary geometry.
+# ``estimate_tma`` accepts keyword overrides to widen it;
+# ``tests/test_sub_tracking.py::TestCoarseSearchEnvelope`` pins all three of
+# the measurements quoted above.
 _COARSE_RANGE_MIN = 3000.0
 _COARSE_RANGE_MAX = 7000.0
 _COARSE_RANGE_STEP = 500.0
 _COARSE_COURSES = range(0, 360, 15)
-_COARSE_SPEEDS = range(5, 40, 5)
+_COARSE_SPEED_MIN = 5
+_COARSE_SPEED_MAX = 40
+_COARSE_SPEED_STEP = 5
 _GAUSS_NEWTON_ITERS = 200
 
 
@@ -357,19 +375,36 @@ def estimate_tma(
     time: np.ndarray,
     bearings: np.ndarray,
     ownship: np.ndarray,
+    *,
+    range_bounds_m: tuple[float, float] = (_COARSE_RANGE_MIN, _COARSE_RANGE_MAX),
+    range_step_m: float = _COARSE_RANGE_STEP,
+    speed_bounds_m_s: tuple[float, float] = (float(_COARSE_SPEED_MIN), float(_COARSE_SPEED_MAX)),
+    speed_step_m_s: float = float(_COARSE_SPEED_STEP),
 ) -> TrackSolution:
     """Batch least-squares target motion analysis from a maneuvering ownship.
 
     Solves for the constant-velocity target ``[px, py, vx, vy]`` that
     minimises the sum of squared bearing residuals
     ``sum_i (bearing_i - atan2(target(t_i) - ownship_i))**2``. A coarse grid
-    search over range/course/speed provides a robust initialisation, then
+    search over range/course/speed provides the initialisation, then
     Gauss–Newton refines it. Fully deterministic.
+
+    **The initialisation is bounded.** By default the grid spans
+    ``[3000, 6500] m`` in 500 m steps and ``[5, 35] m/s`` in 5 m/s steps
+    (courses cover the full circle in 15-degree steps). Those bounds are a
+    declared search envelope, not a property of the algorithm: a target
+    outside them is seeded from the nearest corner of the grid and may not be
+    recovered. Widen ``range_bounds_m`` / ``speed_bounds_m_s`` for geometry
+    outside the default envelope.
 
     Args:
         time: ``(N,)`` sample times (seconds).
         bearings: ``(N,)`` measured relative bearings (rad).
         ownship: ``(N, 2)`` observer positions (metres).
+        range_bounds_m: half-open ``(min, max)`` initial-range search bounds.
+        range_step_m: initial-range grid step (metres).
+        speed_bounds_m_s: half-open ``(min, max)`` speed search bounds.
+        speed_step_m_s: speed grid step (m/s).
 
     Returns:
         A :class:`TrackSolution` with the recovered initial position and
@@ -383,13 +418,20 @@ def estimate_tma(
     if time.size < 4:
         raise ValueError("at least 4 bearing measurements are required")
 
+    if range_step_m <= 0.0 or speed_step_m_s <= 0.0:
+        raise ValueError("range_step_m and speed_step_m_s must be > 0")
+    ranges = np.arange(range_bounds_m[0], range_bounds_m[1], range_step_m)
+    speeds = np.arange(speed_bounds_m_s[0], speed_bounds_m_s[1], speed_step_m_s)
+    if ranges.size == 0 or speeds.size == 0:
+        raise ValueError("the coarse search envelope is empty")
+
     best_f = float("inf")
     best: np.ndarray | None = None
-    for rng0 in np.arange(_COARSE_RANGE_MIN, _COARSE_RANGE_MAX, _COARSE_RANGE_STEP):
+    for rng0 in ranges:
         for course in _COARSE_COURSES:
             vx = math.cos(math.radians(course))
             vy = math.sin(math.radians(course))
-            for speed in _COARSE_SPEEDS:
+            for speed in speeds:
                 p0 = np.array(
                     [rng0 * math.cos(bearings[0]), rng0 * math.sin(bearings[0])], dtype=float
                 )
@@ -434,6 +476,9 @@ class PassiveBearingTracker:
     ownship position is supplied per measurement. As with any bearing-only
     estimator, the ownship must maneuver for range and speed to be
     observable; initialise from :func:`estimate_tma` for reliable convergence.
+
+    ``measurement_noise_rad`` is a bearing *standard deviation* in radians;
+    it is squared internally to form the measurement covariance R.
     """
 
     def __init__(
@@ -451,7 +496,12 @@ class PassiveBearingTracker:
         if measurement_noise_rad <= 0.0:
             raise ValueError("measurement_noise_rad must be > 0")
         self._q = float(process_noise)
-        self._r = float(measurement_noise_rad)
+        #: Measurement noise *covariance* R (rad^2). The constructor takes a
+        #: standard deviation in radians, so it is squared here — the
+        #: innovation covariance ``S = H P H^T + R`` is a variance, and
+        #: passing the standard deviation straight through inflated R by
+        #: 1/sigma (a factor of 100 at the default sigma = 0.01 rad).
+        self._r = float(measurement_noise_rad) ** 2
 
     def predict(self, dt: float) -> None:
         """Advance the estimate one Euler step of size ``dt`` (seconds)."""

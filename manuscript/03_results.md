@@ -1,8 +1,10 @@
 # Results {#sec:results}
 
-All numbers in this section are computed live by the deterministic domain
-core (the canonical scenario); the simulator is seeded so the outputs are
-reproducible exactly.
+All numbers in this section are hydrated from the deterministic domain core
+(the canonical scenario); the simulator is seeded so the outputs are
+reproducible exactly. One of them — the capture timeline under *Liparus
+capture* — is a **declared constant** rather than a computed quantity, and is
+labelled as such where it appears. The rest are measured.
 
 ## Passive tracking
 
@@ -57,10 +59,28 @@ the beamformer power response with the true and estimated bearings marked.
 
 For a bay whose hold is {{TANKER_HOLD_LENGTH_M}} metres long with a
 {{TANKER_MOUTH_WIDTH_M}}-metre mouth and a required clearance of
-{{TANKER_CLEARANCE_M}} metres, the canonical swallow completes in
-{{TANKER_CAPTURE_TIME_S}} seconds and stows {{TANKER_STOWAGE}} submarine(s)
-per pass. @fig:capture_feasibility shows the per-axis clearance margins
-across a sweep of submarine sizes.
+{{TANKER_CLEARANCE_M}} metres, the canonical swallow succeeds and stows
+{{TANKER_STOWAGE}} submarine(s) per pass. @fig:capture_feasibility shows the
+per-axis clearance margins across a sweep of submarine sizes.
+
+The capture model reports an elapsed time of {{TANKER_CAPTURE_TIME_S}}
+seconds over {{TANKER_PHASES_RUN}} phases, and that number is **not a
+result**. It is the sum of four fixed per-phase durations declared in
+`tanker_capture._PHASE_DURATIONS` — assumptions with no cited source and no
+timing model behind them. Nothing in the simulation makes a phase duration
+depend on the submarine or the bay, so the total is identical for a 10-metre
+boat and a 72-metre one, and identical for a capture that succeeds and one
+that fails at the *secure* stage. The only thing it varies with is how far
+the operation got before aborting: a run that fails at ingress reports two
+phases instead of four. `tests/test_tanker_capture.py::TestReportedTimeIsASchedule`
+pins exactly those properties rather than pinning the total, which would have
+been a constant dressed as a measurement.
+
+Two of the four phases likewise carry no discriminating predicate. *Approach*
+always succeeds, and *hatch-seal* succeeds whenever ingress did, because no
+seal-integrity quantity is modelled anywhere in the package. The feasibility
+verdict is therefore pure geometry: mouth clearance at ingress, hold-length
+clearance at secure.
 
 ![Liparus dock-mouth feasibility by submarine size.](../output/figures/capture_feasibility.png){#fig:capture_feasibility}
 
@@ -84,4 +104,6 @@ The `MissionProvider` execute stage runs all six concept modules against the
 canonical scenario and returns a deterministic `MissionOutcome` whose
 `success` flag is true only when the contact is detected, the capture
 succeeds, and the hull is feasible at operating depth, together with full
-`Provenance` (package version, seed, input hash).
+`Provenance` (package version, seed, input hash). The input hash is a
+SHA-256 over the canonical parameter set, so it moves when any input does —
+see Section @sec:reproducibility, which also records what it used to be.

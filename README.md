@@ -29,9 +29,13 @@ expose them.
 | `src/the_spy_who_loved_me/figures/plots.py` | Five deterministic matplotlib figures |
 | `src/the_spy_who_loved_me/mission.py` | The frozen `bond_api.MissionProvider` adapter + `GADGETS` registry |
 
-Everything is deterministic (fixed seeds, no mock framework), and every
-number in the manuscript is computed live by the domain core — never
-hardcoded.
+Everything is deterministic (fixed seeds, no mock framework, no dependency
+substitution). Every number in the manuscript arrives as a `{{TOKEN}}` from a
+live run rather than being typed into prose — with one reported quantity, the
+capture timeline, being a **declared constant** rather than a measurement.
+`manuscript/03_results.md` says so where it appears, and
+`tests/test_tanker_capture.py::TestReportedTimeIsASchedule` pins it as a
+schedule rather than pinning its total.
 
 ## The MissionProvider surface
 
@@ -74,9 +78,16 @@ output/                       # regenerable figures/data (git-ignored)
 
 ```bash
 uv run pytest tests/ --cov=src --cov-fail-under=90
-uv run ruff check src/ scripts/ && uv run ruff format --check src/ scripts/
+uv run ruff check src/ scripts/ tests/ && uv run ruff format --check src/ scripts/ tests/
 uv run mypy src/
 ```
+
+`tests/test_repo_contracts.py` runs with the suite and holds the
+documentation to the package: one version across every declaration site, the
+layer contract in `manuscript/layer_contract.yaml` actually enforced, the
+figure registries equal to what `build_all_figures()` produces, no fabricated
+publication identity, no leftover exemplar boilerplate, and `AGENTS.md`'s
+hardcoded scenario numbers equal to the canonical run.
 
 The coverage gate is line **and** branch on `src/`, at the floor declared by
 `[tool.coverage.report] fail_under` in `pyproject.toml`. That declaration is

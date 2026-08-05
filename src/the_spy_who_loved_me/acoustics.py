@@ -9,8 +9,12 @@ models those physics with real, textbook formulas, all deterministic:
   absorption coefficient in dB/km as a function of frequency.
 * :func:`transmission_loss` — geometric spreading (spherical or
   cylindrical) plus absorption, ``TL(r) = n*10*log10(r) + alpha*r``.
-* :func:`passive_sonar_equation` — the passive sonar equation
-  ``SNR = SL - TL - (NL - DI) - DT``, the standard detection budget.
+* :func:`passive_sonar_equation` — the passive sonar equation in its
+  *signal-excess* form ``SE = SL - TL - (NL - DI) - DT``, the standard
+  detection budget. Note the ``- DT``: signal excess is the margin over the
+  detection threshold, and is **not** the signal-to-noise ratio (which is
+  ``SL - TL - (NL - DI)``, i.e. ``SE + DT``). Urick, *Principles of
+  Underwater Sound*, keeps the two distinct and so does this module.
 * :func:`detection_range_m` — the range at which the propagation loss
   exhausts the figure of merit, solved by monotone bisection.
 * :func:`sound_speed_m_s` — the Mackenzie (1981) sound-speed equation
@@ -30,13 +34,11 @@ __all__ = [
     "detection_range_m",
     "figure_of_merit_db",
     "passive_sonar_equation",
+    "signal_to_noise_ratio_db",
     "sound_speed_m_s",
     "thorp_absorption",
     "transmission_loss",
 ]
-
-#: Reference seawater density used for pressure/depth conversions, kg/m^3.
-SEAWATER_DENSITY_KG_M3 = 1025.0
 
 
 def thorp_absorption(freq_hz: float) -> float:
@@ -143,21 +145,42 @@ def figure_of_merit_db(budget: SonarBudget) -> float:
 def passive_sonar_equation(
     budget: SonarBudget, range_m: float, freq_hz: float, spreading: str = "spherical"
 ) -> float:
-    """Passive sonar equation: received SNR at ``range_m`` (dB).
+    """Passive sonar equation: **signal excess** at ``range_m`` (dB).
 
-    ``SNR = SL - TL(range) - (NL - DI) - DT``; the contact is detectable
-    when the SNR is non-negative.
+    ``SE = SL - TL(range) - (NL - DI) - DT``. The contact is detectable when
+    the signal excess is non-negative — that is what the ``- DT`` term buys.
+
+    This quantity is deliberately *not* called an SNR: the signal-to-noise
+    ratio at the array output is ``SL - TL - (NL - DI)``, which is larger by
+    exactly the detection threshold ``DT``. Use
+    :func:`signal_to_noise_ratio_db` when the SNR is what is wanted.
     """
     tl = transmission_loss(range_m, freq_hz, spreading)
     return float(figure_of_merit_db(budget) - tl)
 
 
+def signal_to_noise_ratio_db(
+    budget: SonarBudget, range_m: float, freq_hz: float, spreading: str = "spherical"
+) -> float:
+    """Signal-to-noise ratio at the array output (dB).
+
+    ``SNR = SL - TL(range) - (NL - DI)``, i.e. the signal excess of
+    :func:`passive_sonar_equation` plus the detection threshold ``DT``.
+    """
+    return passive_sonar_equation(budget, range_m, freq_hz, spreading) + float(budget.dt_db)
+
+
 @dataclass(frozen=True)
 class PropagationResult:
-    """Outcome of a detection-range solve."""
+    """Outcome of a detection-range solve.
+
+    ``signal_excess_db`` is ``SL - TL - (NL - DI) - DT`` at ``range_m`` — the
+    margin over the detection threshold, not the SNR (this field was named
+    ``snr_db`` until the two quantities were separated).
+    """
 
     range_m: float
-    snr_db: float
+    signal_excess_db: float
     tl_db: float
     fom_db: float
     converged: bool
@@ -176,14 +199,14 @@ def detection_range_m(
     ``TL(r)`` is strictly increasing in ``r``, so the equation
     ``TL(r) = FOM`` has at most one root; bisection on ``[1, max_range_m]``
     is deterministic and exact to ``tolerance_m``. When the contact is not
-    detectable even at 1 m (negative SNR at the closest range), the solve
-    returns ``range_m=0`` with ``converged=False``.
+    detectable even at 1 m (negative signal excess at the closest range), the
+    solve returns ``range_m=0`` with ``converged=False``.
     """
     fom = figure_of_merit_db(budget)
-    snr_at_one = passive_sonar_equation(budget, 1.0, freq_hz, spreading)
-    if snr_at_one < 0.0:
+    excess_at_one = passive_sonar_equation(budget, 1.0, freq_hz, spreading)
+    if excess_at_one < 0.0:
         return PropagationResult(
-            0.0, snr_at_one, transmission_loss(1.0, freq_hz, spreading), fom, False
+            0.0, excess_at_one, transmission_loss(1.0, freq_hz, spreading), fom, False
         )
     lo, hi = 1.0, float(max_range_m)
     if passive_sonar_equation(budget, hi, freq_hz, spreading) > 0.0:

@@ -91,6 +91,40 @@ class TestSafetyFactor:
             design_safety_factor(85.0, 0.0)
 
 
+class TestBallastMatchesItsPublishedDerivation:
+    """The docstring's equation must be the equation the code implements.
+
+    The published derivation used to read ``(D + V) rho g = m g``, which
+    solves to ``V = m/rho - D`` — the *negation* of what the function returns
+    — and read the negative case backwards too. The code was right: flooding
+    a tank adds mass at constant displaced volume, so ``D rho g = (m + V rho)
+    g`` and ``V = D - m/rho``. These assertions bind the returned value to
+    that identity, so re-deriving the code from the old docstring fails here.
+    """
+
+    def test_identity_holds_across_the_sign_change(self) -> None:
+        rho = 1025.0
+        for mass, displacement in ((1800.0, 2.0), (5000.0, 2.0), (2050.0, 2.0), (900.0, 1.0)):
+            assert ballast_volume_m3(mass, displacement) == pytest.approx(displacement - mass / rho)
+            # And is *not* the inverted form the old docstring implied.
+            if abs(displacement - mass / rho) > 1e-9:
+                assert ballast_volume_m3(mass, displacement) != pytest.approx(
+                    mass / rho - displacement
+                )
+
+    def test_positive_means_the_vehicle_floats_and_must_flood(self) -> None:
+        rho = 1025.0
+        mass, displacement = 1800.0, 2.0
+        assert displacement * rho > mass  # buoyancy exceeds weight: it floats
+        assert ballast_volume_m3(mass, displacement) > 0.0
+
+    def test_negative_means_the_vehicle_is_already_denser_than_water(self) -> None:
+        rho = 1025.0
+        mass, displacement = 5000.0, 2.0
+        assert displacement * rho < mass  # weight exceeds buoyancy: it sinks
+        assert ballast_volume_m3(mass, displacement) < 0.0
+
+
 class TestBallast:
     def test_floating_vehicle_needs_ballast(self) -> None:
         # Esprit displaces 2.0 m^3 (~2050 kg) but weighs 1800 kg -> floats;

@@ -25,6 +25,8 @@ import enum
 from collections.abc import Mapping
 from dataclasses import dataclass
 
+from .hull_forensics import SEAWATER_DENSITY_KG_M3
+
 __all__ = [
     "BuoyancyClass",
     "ConversionAssessment",
@@ -37,8 +39,13 @@ __all__ = [
     "recommend_upgrades",
 ]
 
-#: Density of fresh water (kg/m^3) used for the buoyancy reference.
-WATER_DENSITY_KG_M3 = 1000.0
+#: Buoyancy reference density (kg/m^3).
+#:
+#: Bound to :data:`hull_forensics.SEAWATER_DENSITY_KG_M3` rather than declared
+#: again. This module used to carry a fresh-water 1000.0 while
+#: ``hull_forensics`` computed the same vehicle's ballast and collapse depth
+#: in seawater at 1025.0 — one vehicle, one manuscript section, two media.
+WATER_DENSITY_KG_M3 = SEAWATER_DENSITY_KG_M3
 #: Gravity, m/s^2.
 G_MPS2 = 9.81
 
@@ -210,6 +217,10 @@ def buoyancy_status(dry_mass_kg: float, displacement_m3: float) -> BuoyancyClass
     weight ``W = mass * g`` (g cancels). ``floats`` when buoyant force
     exceeds weight; ``sinks`` when weight exceeds buoyant force; ``neutral``
     within a 1% band of balance.
+
+    The reference medium is seawater (:data:`WATER_DENSITY_KG_M3`), the same
+    density ``hull_forensics`` uses for ballast volume and collapse depth, so
+    the two verdicts describe one vehicle in one fluid.
     """
     buoyant_force = displacement_m3 * WATER_DENSITY_KG_M3 * G_MPS2
     weight = dry_mass_kg * G_MPS2

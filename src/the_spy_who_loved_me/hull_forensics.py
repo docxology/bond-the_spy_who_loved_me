@@ -133,11 +133,25 @@ def ballast_volume_m3(
 ) -> float:
     """Flood-water volume (m^3) needed to reach neutral buoyancy.
 
-    Neutral buoyancy requires the displaced water weight to equal the total
-    vehicle weight: ``(displacement + ballast_volume) * rho * g = mass * g``.
-    A positive result is the volume of seawater that must be taken aboard to
-    dive; a negative result means the vehicle floats too high and must
-    off-load weight or increase displacement.
+    Flooding a ballast tank adds *mass* at constant displaced volume — the
+    hull envelope does not grow when water enters it. Neutral buoyancy is
+    therefore
+
+    .. math::
+        D \\rho g = (m + V \\rho) g
+        \\quad\\Longrightarrow\\quad
+        V = D - \\frac{m}{\\rho}
+
+    with ``D`` the displaced volume, ``m`` the dry mass and ``rho`` the water
+    density — which is what this function returns.
+
+    A **positive** result is the volume of water that must be taken aboard:
+    the vehicle displaces more than it weighs, so it floats and must be made
+    heavier to dive. A **negative** result means the vehicle is already
+    denser than the water it displaces — it sinks as it stands, needs no
+    ballast at all, and the magnitude is the water volume's worth of mass it
+    would have to shed (or displacement it would have to gain) to become
+    neutral.
     """
     if vehicle_mass_kg <= 0.0:
         raise ValueError("vehicle_mass_kg must be > 0")

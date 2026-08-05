@@ -2,7 +2,7 @@
 
 Why the suite is shaped the way it is, and what each file actually pins.
 
-## No mock framework
+## No mock framework, and no dependency replacement
 
 No `unittest.mock`, `MagicMock`, `mocker.patch`, or `create_autospec`
 anywhere in `tests/`. Every test runs a **real algorithm on real, generated,
@@ -15,13 +15,26 @@ and a buckling formula with a cubed term dropped all pass a mock-based suite
 unchanged. Here the numbers are cheap to compute exactly, so there is no
 reason to substitute anything.
 
-There is exactly one use of `pytest.MonkeyPatch` in the suite, in
-`tests/test_manuscript_variables.py`. It takes a genuinely-computed metric
-dict from `run_canonical()` and degrades a single field, so that the strict
-output gate can be shown to fire on a degenerate run. Nothing is stood in
-for; the real algorithms still produce the baseline. That is environment
-isolation, and it is the only reason a gate that guards against regression
-can itself be tested rather than merely asserted to exist.
+**The suite is also free of `monkeypatch.setattr` on production callables.**
+This section used to say something weaker and self-serving. It read:
+
+> There is exactly one use of `pytest.MonkeyPatch` in the suite […] Nothing
+> is stood in for; the real algorithms still produce the baseline. That is
+> environment isolation.
+
+The code it described was
+`monkeypatch.setattr(mv_module, "run_canonical", degenerate)` — a locally
+defined function installed over a production dependency for the duration of
+a test. That is a dependency replacement. No mock *framework* was imported,
+so the narrower claim survived, but the taxonomy this project inherits
+counts substituted dependencies whether or not a library helped, and calling
+it environment isolation did not make it one.
+
+The fix was structural, not editorial. `_canonical_metrics` now delegates to
+`manuscript_variables.check_metrics(metrics)`, a pure predicate over an
+already-computed mapping. Exercising the guard means calling it with a real
+`run_canonical()` dict that has one field degraded — the algorithms still
+run, nothing is substituted, and the gate is still provably able to fire.
 
 ## Determinism
 
@@ -58,8 +71,30 @@ rather than silently mis-stating the Cramer-Rao bound in the manuscript.
 `test_beam_scan_step_is_read_off_the_estimator_grid` does the same for the
 quantisation floor.
 
+**Shape assertions in place of accuracy assertions.** Every EKF test used to
+end at `.shape`, so a units defect — a bearing standard deviation sitting in
+the measurement-*variance* slot — was invisible under 100% coverage.
+`TestEkfActuallyEstimates` bounds the estimate against truth with a threshold
+placed between the correct behaviour (8.0% of mean range) and the buggy one
+(9.9%), and separately asserts `R == sigma**2`.
+
+**Restating a constant as a result.** `test_successful_capture_phases` used
+to assert `total_time_s == 630.0  # 240+180+90+120`, which pinned the sum of
+four declared constants and read as a timing result.
+`TestReportedTimeIsASchedule` instead pins that the total *is* the schedule
+sum for the phases that ran, that an aborted run reports less, and that two
+very different submarines report the same — the properties that are actually
+true of it.
+
+**A gate nothing runs.** `manuscript/layer_contract.yaml` was documented as
+the machine-readable import contract and was read by no script, test or hook.
+`tests/test_repo_contracts.py` reads it now, along with the version
+declarations, the figure registries, and the documentation-lineage scan whose
+shell predecessor could not fail.
+
 When adding a gate, write down the input that would make it fail. If no such
-input exists, the gate is decoration.
+input exists, the gate is decoration. Then actually feed it that input once,
+and watch it go red.
 
 ## What each test file pins
 
@@ -67,15 +102,16 @@ input exists, the gate is decoration.
 |---|---|
 | `test_acoustics.py` | Thorp absorption monotonicity and magnitude; spherical vs cylindrical spreading; the sonar equation against a hand-checkable budget; bisection convergence, the capped-range branch, and the inaudible-at-1 m `converged=False` branch; Mackenzie sound speed across the valid envelope; input validation |
 | `test_beamforming.py` | Steering-vector phase progression and validation; snapshot determinism under a fixed seed; delay-and-sum peak location; CRB decreasing with SNR and element count and diverging at endfire; scan-grid quantisation on off-grid bearings |
-| `test_sub_tracking.py` | Neyman–Pearson decisions with signal present and absent at controlled `P_FA`; Wilson–Hilferty and Acklam quantile properties; deterministic scenario generation; batch TMA convergence against truth with a manoeuvring ownship; EKF predict/update mechanics and error branches; `tracking_rms_error` |
-| `test_tanker_capture.py` | Clearance metrics and the `fits` / `tight` / `denied` classification; stowage capacity; the full four-phase capture success path and each failure path; per-phase timing |
+| `test_sub_tracking.py` | Neyman–Pearson decisions with signal present and absent at controlled `P_FA`; Wilson–Hilferty and Acklam quantile properties; deterministic scenario generation; batch TMA convergence against truth with a manoeuvring ownship; **EKF steady-state accuracy against truth and the `R = sigma**2` convention**; **the coarse-search envelope's real limits, on both sides**; `tracking_rms_error` |
+| `test_tanker_capture.py` | Clearance metrics and the `fits` / `tight` / `denied` classification; stowage capacity; the full four-phase capture success path and each failure path; **that the reported time is the declared schedule for the phases run, not a result**; **that the secure predicate is hold-length geometry and nothing else** |
 | `test_vehicle_forensics.py` | Requirement traceability; readiness classification across all three classes; explicit-`False` and omitted systems agreeing, with no double-counting; the `amphibious` predicate matching its docstring; Archimedean buoyancy in all three states; upgrade ordering |
 | `test_hull_forensics.py` | Hoop stress; long-cylinder buckling; yield pressure; collapse pressure taking the governing minimum in both regimes; collapse depth; safety factor; ballast volume sign convention; input validation |
-| `test_scenario.py` | The canonical run being complete, deterministic, and seeded; reported setup parameters re-derived from measured output rather than restated; derived SNR and scan step |
+| `test_scenario.py` | The canonical run being complete, deterministic, and seeded; reported setup parameters re-derived from measured output rather than restated; derived SNR and scan step; **the provenance input hash moving when any canonical parameter moves, and covering every scenario constant** |
 | `test_mission.py` | The frozen `bond_api.MissionProvider` lifecycle; runtime-checkable protocol conformance; deterministic results; gadget registration and lookup through `GadgetRegistry` |
-| `test_manuscript_variables.py` | Config loading and its two rejection paths; the live token cross-reference over `manuscript/[0-9]*.md`; strict and non-strict tree resolution; the coverage floor matching `pyproject.toml`; each strict output guard firing |
+| `test_manuscript_variables.py` | Config loading and its two rejection paths; the live token cross-reference over `manuscript/[0-9]*.md`; strict and non-strict tree resolution; the coverage floor matching `pyproject.toml`; each strict output guard firing, via a pure predicate rather than a substituted dependency; **the persisted variable map being identical across regenerations, and carrying no wall-clock value under any name** |
 | `test_figures.py` | All five figures rendering to non-empty files; the capture-feasibility colour branches for all three fit classes |
 | `test_scripts_smoke.py` | The thin CLIs run as subprocesses with `sys.executable`, exit zero, and write the artefacts they claim to |
+| `test_repo_contracts.py` | **The documentation against the package**: one version across seven declaration sites; the layer contract in `manuscript/layer_contract.yaml` actually enforced; the figure registries equal to `build_all_figures()`; no fabricated publication identity in any document; no exemplar boilerplate; `AGENTS.md`'s hardcoded scenario numbers equal to the canonical run; the claim ledger pointing at files and symbols that exist |
 
 ## The live cross-reference
 

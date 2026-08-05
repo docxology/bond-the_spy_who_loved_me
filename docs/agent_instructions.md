@@ -14,12 +14,14 @@ file.
 
 ## The 8 hard rules
 
-1. **Zero mocks.** No `unittest.mock`, `MagicMock`, `@patch`, or
-   `create_autospec` anywhere in `tests/`. Tests exercise the real,
-   deterministic algorithms on real (generated) data. The single
-   `pytest.MonkeyPatch` use in `tests/test_manuscript_variables.py` degrades
-   one field of a genuinely-computed metric dict so the strict output gate
-   can be proven to fire — environment isolation, not a stand-in.
+1. **Zero mocks and zero stand-ins.** No `unittest.mock`, `MagicMock`,
+   `@patch`, or `create_autospec` anywhere in `tests/` — and no
+   `monkeypatch.setattr` replacing a production callable, which is a
+   dependency replacement however it is labelled. Tests exercise the real,
+   deterministic algorithms on real (generated) data. Where a guard needs
+   degenerate input, make the guard a pure predicate over data and hand it
+   a real result with one field degraded (see
+   `manuscript_variables.check_metrics`).
 2. **Coverage at or above the floor on `src/`.** Run `uv run pytest tests/
    --cov=src --cov-fail-under=90`. Line and branch. The floor of record is
    `[tool.coverage.report] fail_under` in `pyproject.toml`; do not quote a
@@ -68,11 +70,15 @@ and registers concept gadgets on a `GadgetRegistry`.
 
 ```bash
 uv run pytest tests/ --cov=src --cov-fail-under=90
-uv run ruff check src/ scripts/ tests/ && uv run ruff format src/ scripts/ tests/
-uv run mypy src/ scripts/
-rg -n "template[_]code_project" . --glob '!uv.lock' --glob '!.git/**' || echo Clean
+uv run ruff check src/ scripts/ tests/ && uv run ruff format --check src/ scripts/ tests/
+uv run mypy src/
 git status --short   # clean after a path-scoped commit
 ```
+
+The documentation gates — lineage/boilerplate scan, layer contract, version
+cross-check, figure registries, fabricated-publication scan — live in
+`tests/test_repo_contracts.py` and run with the suite. They replaced shell
+one-liners that could not fail; see [`AGENTS.md`](AGENTS.md).
 
 ## Documentation index
 

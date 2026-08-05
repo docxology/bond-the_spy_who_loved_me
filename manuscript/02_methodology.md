@@ -30,10 +30,26 @@ over the state `[px, py, vx, vy]` it minimises the sum of squared bearing
 residuals
 `sum_i (bearing_i - atan2(p_y + v_y t_i - o_y, p_x + v_x t_i - o_x))^2`,
 initialised by a coarse grid search over range/course/speed and refined by
-Gauss–Newton. `PassiveBearingTracker` is the matching recursive Extended
-Kalman Filter for online use, with the relative-bearing measurement model and
-a constant-velocity transition. `tracking_rms_error` reports steady-state
-accuracy.
+Gauss–Newton.
+
+That grid search is **bounded, and its bounds bracket the canonical
+scenario**: candidate initial ranges run 3000–6500 m in 500 m steps and
+candidate speeds 5–35 m/s in 5 m/s steps, against a canonical truth of
+4000 m and 25 m/s. This is a declared search envelope, not a property of the
+estimator, and canonical accuracy is therefore not evidence about arbitrary
+geometry. The degradation outside it is graceful rather than a cliff — with
+only the initial range varied, a 15 km target is still recovered to 293 m
+because Gauss–Newton escapes the poor seed, while a 60 km target leaves a
+25 km error (42% of range) that widening the range bound to 80 km cuts to
+4.9 km. `estimate_tma` accepts keyword overrides for the envelope, and
+`tests/test_sub_tracking.py::TestCoarseSearchEnvelope` pins all three of
+those measurements.
+
+`PassiveBearingTracker` is the matching recursive Extended Kalman Filter for
+online use, with the relative-bearing measurement model and a
+constant-velocity transition; its `measurement_noise_rad` is a bearing
+standard deviation and is squared into the measurement covariance `R`.
+`tracking_rms_error` reports steady-state accuracy.
 
 ## Liparus-class tanker capture
 
@@ -44,8 +60,20 @@ between a `SubmarineSpec` and a `BayConfig` mouth/hold, and
 `classify_clearance` labels the fit `fits` / `tight` / `denied` against a
 required safety margin. `stowage_capacity` is how many submarines the hold
 can stow. `simulate_capture` runs the four-phase operation (approach,
-ingress, hatch-seal, secure), each phase decided by a fixed predicate, and
-returns a `CaptureRun` with a per-phase timeline and final status.
+ingress, hatch-seal, secure) and returns a `CaptureRun` with a per-phase
+timeline and final status.
+
+Only two of those four phases test anything. *Ingress* requires the mouth to
+clear the submarine's beam and depth by the safety margin, and *secure*
+requires the hold to clear its length by the same margin; *approach* and
+*hatch-seal* always succeed. No seal-integrity quantity is modelled anywhere
+in the package, so the hatch-seal stage has nothing of its own to check — a
+`seal_requirement` field on `BayConfig` supplied the appearance of one until
+it was removed, because the constructor validated it into `[0, 1]` and the
+predicate then compared it against `1.0`, a conjunct that could never be
+false. The per-phase durations are likewise declared constants, not a timing
+model; Section @sec:results says what that means for the reported elapsed
+time.
 
 ## Submersible vehicle forensics
 
@@ -66,10 +94,20 @@ Liparus and its quarry move through. `thorp_absorption` implements the Thorp
 (1967) seawater absorption coefficient, ``transmission_loss`` combines
 geometric spreading with absorption to give ``TL(r) = n*10*log10(r) +
 alpha*r``, and `sound_speed_m_s` implements the Mackenzie (1981) equation.
-The passive sonar equation ``SNR = SL - TL - (NL - DI) - DT``
-(`passive_sonar_equation`) is the detection budget, and
-`detection_range_m` solves for the maximum detectable range by monotone
-bisection of the strictly-increasing transmission loss.
+The passive sonar equation in signal-excess form
+``SE = SL - TL - (NL - DI) - DT`` (`passive_sonar_equation`) is the detection
+budget, and `detection_range_m` solves for the maximum detectable range by
+monotone bisection of the strictly-increasing transmission loss — the range
+at which the signal excess reaches zero.
+
+Signal excess is not the signal-to-noise ratio, and the two are kept apart
+here because this package previously called the quantity above an SNR in
+code, prose and test names. Following Urick [@urick_principles_1983], the
+array-output SNR is ``SL - TL - (NL - DI)`` — larger than the signal excess
+by exactly the detection threshold ``DT``, and available as
+`signal_to_noise_ratio_db`. With the canonical budget the difference is
+{{ACO_DETECTION_THRESHOLD_DB}} dB, so calling the figure of merit an SNR
+overstates the margin by that much.
 
 ## Uniform-linear-array beamforming
 
@@ -104,6 +142,18 @@ long-cylinder buckling pressure ``p_cr = E (t/r)^3 / (4(1-nu^2))`` and
 a depth in seawater. `ballast_volume_m3` applies Archimedes to find the
 flood-water volume needed for neutral buoyancy — the threshold between a
 road car and a submarine.
+
+Flooding a tank adds mass at constant displaced volume, so neutral buoyancy
+is `D rho g = (m + V rho) g`, giving `V = D - m/rho`: positive when the
+vehicle displaces more than it weighs and must be made heavier to dive,
+negative when it is already denser than the water it displaces. The
+module's published derivation previously read `(D + V) rho g = m g`, which
+solves to the negation of what the code computes, and read the negative case
+backwards as well. The code was right and the derivation wrong; the
+derivation is corrected rather than the code. `vehicle_forensics.buoyancy_status`
+uses the same seawater density as this module, so the two verdicts on one
+vehicle describe one fluid — it used fresh water at 1000 kg/m³ until this was
+fixed.
 
 ## Mission orchestration
 

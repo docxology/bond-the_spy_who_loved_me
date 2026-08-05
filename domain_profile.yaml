@@ -13,10 +13,13 @@ validation_gates:
   - determinism
   - coverage_tested
   - manuscript_token_hydration
+# Gated against build_all_figures() by tests/test_repo_contracts.py.
 figure_types:
   - bearing_track
+  - beamforming_response
   - capture_feasibility
   - conversion_readiness
+  - sonar_detection_range
 citation_policy: official_or_scholarly
 source_policy: "Prefer the deterministic domain core and scholarly acoustics/sonar references (Neyman-Pearson detection, bearing-only TMA observability)."
 review_gates:
@@ -26,6 +29,8 @@ artifact_expectations:
   - output/data/manuscript_variables.json
   - output/data/mission_outcome.json
   - output/figures/bearing_track.png
+  - output/figures/beamforming_response.png
   - output/figures/capture_feasibility.png
   - output/figures/conversion_readiness.png
+  - output/figures/sonar_detection_range.png
 llm_prompt_guidance: "Use the deterministic domain core and generated manuscript variables as the evidence source; do not invent numeric results."

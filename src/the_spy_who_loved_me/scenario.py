@@ -12,7 +12,10 @@ reproducible and auditable.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import math
+from collections.abc import Mapping
 from typing import Any
 
 import numpy as np
@@ -38,6 +41,8 @@ from .vehicle_forensics import VehicleSpec, assess_conversion
 
 __all__ = [
     "SEED",
+    "canonical_input_hash",
+    "canonical_parameters",
     "run_canonical",
 ]
 
@@ -101,6 +106,73 @@ _HULL_YIELD_PA = 350.0e6
 _HULL_YOUNG_PA = 200.0e9
 _HULL_OPERATING_DEPTH_M = 40.0
 _HULL_SF_MIN = 1.5
+
+
+def canonical_parameters() -> dict[str, float | int]:
+    """Every input the canonical scenario is run with, as one flat mapping.
+
+    This is the *input* side of :func:`run_canonical`: the seed and each
+    module-level constant that reaches an algorithm. It exists so the
+    provenance record can carry a hash of what was actually fed in
+    (:func:`canonical_input_hash`) rather than a fixed package label.
+
+    Any parameter added to the scenario must be added here too, or the input
+    hash silently stops covering it; ``tests/test_scenario.py`` pins the key
+    set against the constants defined in this module.
+    """
+    return {
+        "seed": SEED,
+        "detection_snr_db": _DETECTION_SNR_DB,
+        "detection_fs": _DETECTION_FS,
+        "detection_duration_s": _DETECTION_DURATION_S,
+        "track_duration_s": _TRACK_DURATION_S,
+        "track_dt_s": _TRACK_DT_S,
+        "track_speed_m_s": _TRACK_SPEED_M_S,
+        "track_course_deg": _TRACK_COURSE_DEG,
+        "track_bearing_noise_deg": _TRACK_BEARING_NOISE_DEG,
+        "bay_mouth_width_m": _BAY.mouth_width_m,
+        "bay_mouth_height_m": _BAY.mouth_height_m,
+        "bay_hold_length_m": _BAY.hold_length_m,
+        "bay_clearance_m": _BAY.clearance_m,
+        "sub_length_m": _SUB.length_m,
+        "sub_beam_m": _SUB.beam_m,
+        "sub_depth_m": _SUB.depth_m,
+        "vehicle_dry_mass_kg": _VEHICLE.dry_mass_kg,
+        "vehicle_displacement_m3": _VEHICLE.displacement_m3,
+        "vehicle_systems_fitted": sum(1 for fitted in _VEHICLE.systems.values() if fitted),
+        "sonar_sl_db": _SONAR_BUDGET.sl_db,
+        "sonar_nl_db": _SONAR_BUDGET.nl_db,
+        "sonar_di_db": _SONAR_BUDGET.di_db,
+        "sonar_dt_db": _SONAR_BUDGET.dt_db,
+        "sonar_freq_hz": _SONAR_FREQ_HZ,
+        "sound_temp_c": _SOUND_TEMP_C,
+        "sound_salinity_psu": _SOUND_SALINITY_PSU,
+        "sound_depth_m": _SOUND_DEPTH_M,
+        "beam_n_elements": _BEAM_N_ELEMENTS,
+        "beam_d_over_lambda": _BEAM_D_OVER_LAMBDA,
+        "beam_true_bearing_deg": _BEAM_TRUE_BEARING_DEG,
+        "beam_amplitude": _BEAM_AMPLITUDE,
+        "beam_noise_std": _BEAM_NOISE_STD,
+        "hull_radius_m": _HULL_RADIUS_M,
+        "hull_thickness_m": _HULL_THICKNESS_M,
+        "hull_yield_pa": _HULL_YIELD_PA,
+        "hull_young_pa": _HULL_YOUNG_PA,
+        "hull_operating_depth_m": _HULL_OPERATING_DEPTH_M,
+        "hull_sf_min": _HULL_SF_MIN,
+    }
+
+
+def canonical_input_hash(parameters: Mapping[str, float | int] | None = None) -> str:
+    """SHA-256 over a stable serialisation of the scenario inputs.
+
+    Defaults to :func:`canonical_parameters`. The serialisation is
+    key-sorted compact JSON, so the digest depends on the parameter *values*
+    and names and not on dict ordering or formatting — editing any canonical
+    parameter changes it, and re-running with the same parameters does not.
+    """
+    params = dict(canonical_parameters() if parameters is None else parameters)
+    payload = json.dumps(params, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
 def run_canonical() -> dict[str, Any]:
@@ -179,7 +251,11 @@ def run_canonical() -> dict[str, Any]:
         # tanker_capture
         "capture_clearance": classify_clearance(_SUB, _BAY),
         "capture_success": capture.success,
+        # Declared nominal schedule, not a measured or derived duration —
+        # see ``tanker_capture._PHASE_DURATIONS``. It is the sum of the fixed
+        # per-phase durations for the phases this run reached.
         "capture_time_s": round(capture.total_time_s, 1),
+        "capture_phases_run": len(capture.phases),
         "capture_stowage": stowage_capacity(_SUB, _BAY),
         "tanker_hold_length_m": _BAY.hold_length_m,
         "tanker_mouth_width_m": _BAY.mouth_width_m,
@@ -203,6 +279,7 @@ def run_canonical() -> dict[str, Any]:
         "aco_source_level_db": _SONAR_BUDGET.sl_db,
         "aco_noise_level_db": _SONAR_BUDGET.nl_db,
         "aco_directivity_db": _SONAR_BUDGET.di_db,
+        "aco_detection_threshold_db": _SONAR_BUDGET.dt_db,
         "aco_temp_c": _SOUND_TEMP_C,
         "aco_salinity_psu": _SOUND_SALINITY_PSU,
         # beamforming

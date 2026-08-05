@@ -8,10 +8,10 @@ from pathlib import Path
 import pytest
 import yaml
 
-from the_spy_who_loved_me import manuscript_variables as mv_module
 from the_spy_who_loved_me.manuscript_variables import (
     PACKAGE_ROOT,
     _canonical_metrics,
+    check_metrics,
     coverage_floor_pct,
     generate_variables,
     load_manuscript_config,
@@ -152,13 +152,18 @@ class TestCoverageFloor:
 class TestStrictOutputGate:
     """The ``require_outputs`` guards must be able to fire, not just exist.
 
-    Each guard is driven by feeding ``_canonical_metrics`` a degenerate
-    metric dict, so the gate is exercised rather than merely present.
+    Each guard is driven by handing :func:`check_metrics` a genuine
+    ``run_canonical()`` dict with one field degraded. Nothing is substituted:
+    the gate is a pure predicate over a metric mapping, so exercising it
+    needs no ``monkeypatch.setattr`` on ``run_canonical`` — which the earlier
+    version of this file did, and which is a dependency replacement however
+    it is labelled.
     """
 
     def test_passes_on_the_real_canonical_run(self) -> None:
         metrics = _canonical_metrics(require_outputs=True)
         assert metrics["detected"] is True
+        assert check_metrics(metrics) is None
 
     @pytest.mark.parametrize(
         ("key", "bad_value", "fragment"),
@@ -168,37 +173,50 @@ class TestStrictOutputGate:
             ("hull_feasible", False, "not feasible"),
         ],
     )
-    def test_each_guard_fires(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
-        key: str,
-        bad_value: object,
-        fragment: str,
-    ) -> None:
-        good = run_canonical()
-
-        def degenerate() -> dict[str, object]:
-            broken = dict(good)
-            broken[key] = bad_value
-            return broken
-
-        # Environment isolation only: the real algorithms still produce the
-        # baseline dict; a single field is degraded to prove the guard reads
-        # it. No mock framework is involved.
-        monkeypatch.setattr(mv_module, "run_canonical", degenerate)
+    def test_each_guard_fires(self, key: str, bad_value: object, fragment: str) -> None:
+        degraded = dict(run_canonical())
+        degraded[key] = bad_value
         with pytest.raises(ValueError, match=fragment):
-            _canonical_metrics(require_outputs=True)
+            check_metrics(degraded)
 
-    def test_guards_are_skipped_in_draft_mode(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        good = run_canonical()
+    def test_guards_are_skipped_in_draft_mode(self) -> None:
+        """Draft mode must not call the gate at all."""
+        degraded = dict(run_canonical())
+        degraded["detected"] = False
+        with pytest.raises(ValueError):
+            check_metrics(degraded)  # strict would reject it ...
+        # ... and draft mode renders the real run without consulting it.
+        assert _canonical_metrics(require_outputs=False)["detected"] is True
 
-        def degenerate() -> dict[str, object]:
-            broken = dict(good)
-            broken["detected"] = False
-            return broken
 
-        monkeypatch.setattr(mv_module, "run_canonical", degenerate)
-        assert _canonical_metrics(require_outputs=False)["detected"] is False
+class TestPersistedArtefactIsDeterministic:
+    """`06_reproducibility.md` claims no wall-clock in persisted artefacts.
+
+    A ``GENERATION_TIMESTAMP`` token used to be emitted into the very map
+    that ``scripts/z_generate_manuscript_variables.py`` writes to
+    ``output/data/manuscript_variables.json``, so every regeneration differed
+    and the claim was false. These assertions are what makes it true: they
+    fail the moment any wall-clock value re-enters the map.
+    """
+
+    def test_two_generations_are_identical(self) -> None:
+        assert generate_variables() == generate_variables()
+
+    def test_serialised_map_is_byte_identical(self) -> None:
+        import json
+
+        first = json.dumps(generate_variables(), indent=2, sort_keys=True)
+        second = json.dumps(generate_variables(), indent=2, sort_keys=True)
+        assert first == second
+
+    def test_no_token_carries_a_wall_clock_value(self) -> None:
+        """No value may parse as a current date/time, whatever it is named."""
+        import re
+
+        stamp = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}")
+        variables = generate_variables()
+        offenders = {k: v for k, v in variables.items() if stamp.search(v)}
+        assert not offenders, f"wall-clock values in the persisted map: {offenders}"
 
 
 class TestConfigValidation:

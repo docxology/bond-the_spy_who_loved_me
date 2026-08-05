@@ -36,7 +36,7 @@ from bond_api.registry import GadgetRegistry
 from .acoustics import SonarBudget, detection_range_m
 from .beamforming import array_snapshot, estimate_bearing_deg
 from .hull_forensics import collapse_depth_m, design_safety_factor
-from .scenario import SEED, run_canonical
+from .scenario import SEED, canonical_input_hash, run_canonical
 from .sub_tracking import detect_contract, estimate_tma, simulate_signal, simulate_target_track
 from .tanker_capture import simulate_capture
 from .vehicle_forensics import assess_conversion
@@ -136,7 +136,14 @@ class MissionProvider:  # noqa: N801 — class name fixed by the discovery contr
         )
 
     def execute(self, plan: MissionPlan) -> MissionOutcome:
-        """Run the canonical concept workload and return measured results."""
+        """Run the canonical concept workload and return measured results.
+
+        ``input_hash`` is a SHA-256 over the canonical scenario's actual
+        parameter set (:func:`the_spy_who_loved_me.scenario.canonical_input_hash`),
+        so editing any canonical input changes it. It was a fixed string
+        literal until this was fixed, which meant it identified the package
+        and not the inputs.
+        """
         results = run_canonical()
         return MissionOutcome(
             success=bool(
@@ -146,7 +153,7 @@ class MissionProvider:  # noqa: N801 — class name fixed by the discovery contr
             provenance=Provenance(
                 package_version=PACKAGE_VERSION,
                 seed=SEED,
-                input_hash="liparus-mission-input",
+                input_hash=canonical_input_hash(),
                 wall_time_s=0.0,
             ),
         )

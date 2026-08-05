@@ -12,6 +12,7 @@ from the_spy_who_loved_me.acoustics import (
     detection_range_m,
     figure_of_merit_db,
     passive_sonar_equation,
+    signal_to_noise_ratio_db,
     sound_speed_m_s,
     thorp_absorption,
     transmission_loss,
@@ -71,11 +72,31 @@ class TestSonarBudget:
 
 
 class TestSonarEquation:
-    def test_snr_positive_near_zero_range(self) -> None:
+    def test_signal_excess_positive_near_zero_range(self) -> None:
         budget = SonarBudget(160.0, 70.0, 20.0, 10.0)
+        # SL - (NL - DI) - DT = 160 - 50 - 10 = 100 dB of signal *excess*
+        # at 1 m, where the transmission loss is ~0.
         assert passive_sonar_equation(budget, 1.0, 400.0) == pytest.approx(100.0, abs=1.0)
 
-    def test_snr_drops_with_range(self) -> None:
+    def test_signal_excess_is_not_the_snr(self) -> None:
+        """SE and SNR differ by exactly the detection threshold.
+
+        Urick keeps ``SE = SL - TL - (NL - DI) - DT`` distinct from
+        ``SNR = SL - TL - (NL - DI)``. This package used to call the first
+        one an SNR in code, prose and test names; the two are pinned apart
+        here so the confusion cannot come back silently.
+        """
+        budget = SonarBudget(160.0, 70.0, 20.0, dt_db=10.0)
+        for r in (1.0, 500.0, 5000.0):
+            se = passive_sonar_equation(budget, r, 400.0)
+            snr = signal_to_noise_ratio_db(budget, r, 400.0)
+            assert snr - se == pytest.approx(budget.dt_db)
+        # A non-zero threshold means they are genuinely different numbers.
+        assert signal_to_noise_ratio_db(budget, 1.0, 400.0) != pytest.approx(
+            passive_sonar_equation(budget, 1.0, 400.0)
+        )
+
+    def test_signal_excess_drops_with_range(self) -> None:
         budget = SonarBudget(160.0, 70.0, 20.0, 10.0)
         assert passive_sonar_equation(budget, 10000.0, 400.0) < passive_sonar_equation(
             budget, 1000.0, 400.0
@@ -87,8 +108,8 @@ class TestDetectionRange:
         res = detection_range_m(SonarBudget(160.0, 70.0, 20.0, 10.0), 400.0)
         assert res.converged is True
         assert res.range_m > 1000.0
-        # At the solved range the SNR is ~0.
-        assert abs(res.snr_db) < 0.1
+        # At the solved range the signal excess is ~0 (the detection edge).
+        assert abs(res.signal_excess_db) < 0.1
         assert isinstance(res, PropagationResult)
 
     def test_contact_unheard_even_at_one_metre(self) -> None:
