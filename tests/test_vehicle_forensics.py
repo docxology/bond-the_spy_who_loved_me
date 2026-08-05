@@ -107,3 +107,58 @@ class TestRecommendations:
         upgrades = recommend_upgrades(VehicleSpec("x", 1000.0, 1.1, {"underwater_thrust": True}))
         assert upgrades
         assert upgrades[0].critical is True  # critical gaps sort first
+
+
+class TestExplicitlyAbsentSystem:
+    """A system present in ``systems`` but set to ``False`` is *missing*.
+
+    This is a distinct code path from a system omitted from the mapping
+    entirely, and the two must produce the same assessment — otherwise a
+    surveyor who writes ``"air_supply": False`` would silently score
+    differently from one who leaves the key out.
+    """
+
+    def _spec(self, systems: dict[str, bool]) -> VehicleSpec:
+        return VehicleSpec("probe", dry_mass_kg=1500.0, displacement_m3=2.0, systems=systems)
+
+    def test_false_value_counts_as_missing(self) -> None:
+        spec = self._spec({"pressure_hull": True, "air_supply": False})
+        result = assess_conversion(spec)
+        names = {r.name for r in result.missing}
+        assert "air_supply" in names
+        assert "air_supply" not in {r.name for r in result.satisfied}
+
+    def test_false_and_omitted_agree(self) -> None:
+        explicit = assess_conversion(self._spec({"pressure_hull": True, "watertight_seals": False}))
+        omitted = assess_conversion(self._spec({"pressure_hull": True}))
+        assert explicit.score == omitted.score
+        assert explicit.classification is omitted.classification
+        assert {r.name for r in explicit.missing} == {r.name for r in omitted.missing}
+
+    def test_no_requirement_is_double_counted(self) -> None:
+        """The explicit-False branch must not also append via the omitted loop."""
+        spec = self._spec({"pressure_hull": True, "ballast_system": False})
+        result = assess_conversion(spec)
+        names = [r.name for r in result.missing]
+        assert len(names) == len(set(names)), f"duplicate missing entries: {names}"
+        assert len(result.satisfied) + len(result.missing) == len(SUBMERSIBLE_REQUIREMENTS)
+
+    def test_all_false_is_road_only(self) -> None:
+        spec = self._spec({r.name: False for r in SUBMERSIBLE_REQUIREMENTS})
+        result = assess_conversion(spec)
+        assert result.score == 0.0
+        assert result.classification is ConversionClass.ROAD_ONLY
+
+
+class TestAmphibiousPredicateMatchesDocstring:
+    """``amphibious`` is ``num_satisfied > 0``, not "an optional system"."""
+
+    def test_only_a_critical_system_still_reads_amphibious(self) -> None:
+        spec = VehicleSpec(
+            "hull only", dry_mass_kg=1500.0, displacement_m3=2.0, systems={"pressure_hull": True}
+        )
+        assert assess_conversion(spec).classification is ConversionClass.AMPHIBIOUS
+
+    def test_nothing_fitted_is_road_only(self) -> None:
+        spec = VehicleSpec("bare", dry_mass_kg=1500.0, displacement_m3=2.0, systems={})
+        assert assess_conversion(spec).classification is ConversionClass.ROAD_ONLY

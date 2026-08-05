@@ -88,3 +88,21 @@ def test_conversion_fig() -> None:
 
 def test_figures_dir_defined() -> None:
     assert FIGURES_DIR.name == "figures"
+
+
+def test_capture_feasibility_colours_all_three_fit_classes(tmp_path: Path) -> None:
+    """Exercise the green / orange / red colour branches in one render.
+
+    The default figure only ever plots submarines that fit comfortably, so
+    the "tight" branch (fits, but inside the required margin) never ran.
+    These three sizes are chosen against the bay below to hit each branch.
+    """
+    bay = BayConfig(mouth_width_m=16.0, mouth_height_m=14.0, hold_length_m=140.0, clearance_m=1.5)
+    sizes = [
+        (72.0, 8.0, 7.0),  # comfortable margin -> green
+        (139.0, 15.5, 13.6),  # fits but inside the 1.5 m margin -> orange
+        (200.0, 20.0, 18.0),  # does not fit at all -> red
+    ]
+    out = plot_capture_feasibility(sizes, bay, filename="capture_feasibility_branches.png")
+    assert out.is_file()
+    assert out.stat().st_size > 0

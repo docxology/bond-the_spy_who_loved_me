@@ -12,24 +12,36 @@ file.
 - **Local-only tree**: no remote, never push. Commit path-scoped within this
   package's own git repo.
 
-## The 7 hard rules
+## The 8 hard rules
 
 1. **Zero mocks.** No `unittest.mock`, `MagicMock`, `@patch`, or
    `create_autospec` anywhere in `tests/`. Tests exercise the real,
-   deterministic algorithms on real (generated) data.
-2. **≥90% coverage on `src/`.** Run `uv run pytest tests/ --cov=src
-   --cov-fail-under=90`. Line and branch.
+   deterministic algorithms on real (generated) data. The single
+   `pytest.MonkeyPatch` use in `tests/test_manuscript_variables.py` degrades
+   one field of a genuinely-computed metric dict so the strict output gate
+   can be proven to fire — environment isolation, not a stand-in.
+2. **Coverage at or above the floor on `src/`.** Run `uv run pytest tests/
+   --cov=src --cov-fail-under=90`. Line and branch. The floor of record is
+   `[tool.coverage.report] fail_under` in `pyproject.toml`; do not quote a
+   coverage number in prose, cite the gate or use the
+   `{{COVERAGE_FLOOR_PCT}}` token.
 3. **Thin orchestrators in `scripts/`.** Business logic lives in `src/`;
    scripts delegate and shape argv only.
-4. **Pure domain core is protocol-free.** `sub_tracking.py`,
-   `tanker_capture.py`, `vehicle_forensics.py` must not import `bond_api` or
-   `infrastructure`. Only `mission.py` imports `bond_api`.
-5. **Show-not-tell in the manuscript.** Reference explicit functions/paths,
+4. **Pure domain core is protocol-free.** All six concept modules —
+   `sub_tracking.py`, `tanker_capture.py`, `vehicle_forensics.py`,
+   `acoustics.py`, `beamforming.py`, `hull_forensics.py` — plus
+   `scenario.py` must not import `bond_api` or `infrastructure`. Only
+   `mission.py` imports `bond_api`.
+5. **One source per constant.** Canonical scenario parameters live in
+   `scenario.py` and nowhere else. If a value can be derived from another,
+   derive it rather than restating it — a restated constant is a silent
+   drift waiting to happen.
+6. **Show-not-tell in the manuscript.** Reference explicit functions/paths,
    not vague descriptions; every metric flows from
    `manuscript_variables.py`, never hand-authored in prose.
-6. **Type hints, docstrings, ruff, mypy.** Sign public API; keep `ruff
+7. **Type hints, docstrings, ruff, mypy.** Sign public API; keep `ruff
    check`/`format` and `mypy` clean on `src/` and `scripts/`.
-7. **Determinism.** Fixed seeds, no untracked RNG, no wall-clock in
+8. **Determinism.** Fixed seeds, no untracked RNG, no wall-clock in
    persisted artifacts.
 
 ## Mission protocol
@@ -44,10 +56,13 @@ and registers concept gadgets on a `GadgetRegistry`.
 
 1. Read the relevant module and its tests before editing.
 2. Make the change in `src/` (or a thin `scripts/` wrapper).
-3. Add/update a deterministic test in `tests/`.
+3. Add/update a deterministic test in `tests/`. Before writing it, name the
+   input that would make it fail; if there is none, the test is decoration.
 4. If a manuscript number changes, update the corresponding section to use
    the `{{TOKEN}}` from `manuscript_variables.generate_variables()`.
-5. Run the full verification below before committing.
+5. If you added a scenario parameter, report it from `run_canonical()` and
+   token it, rather than typing it into the experimental-setup section.
+6. Run the full verification below before committing.
 
 ## Verification (run before “done”)
 
@@ -61,6 +76,12 @@ git status --short   # clean after a path-scoped commit
 
 ## Documentation index
 
-- `AGENTS.md` — layer contract + package identity.
-- `architecture.md` — module boundaries and dependency direction.
-- `testing_philosophy.md` — zero-mock policy + coverage mechanics.
+- [`README.md`](README.md) — index of this `docs/` directory.
+- [`AGENTS.md`](AGENTS.md) — scope, the five invariants, the frozen mission
+  surface, the layer contract, and the change protocol.
+- [`architecture.md`](architecture.md) — what each module in `src/`
+  computes, how they compose, and how `mission.py` implements the frozen
+  `MissionProvider`.
+- [`testing_philosophy.md`](testing_philosophy.md) — the no-mock/real-data/
+  determinism doctrine and a per-file table of what the suite pins.
+- [`../AGENTS.md`](../AGENTS.md) — package identity and layer-contract table.

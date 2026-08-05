@@ -7,7 +7,7 @@
 paper:
   # RASP Standard: title must be descriptive and objective.
   title: "The Spy Who Loved Me: LIPARUS — Special-Agent Mission Software"
-  subtitle: "Passive Acoustic Tracking, Liparus-Class Tanker Capture, and Submersible Vehicle Forensics"
+  subtitle: "Passive Acoustic Detection, Bearing-Only Tracking, ULA Beamforming, Liparus-Class Tanker Capture, and Submersible Hull and Vehicle Forensics"
   version: "0.1.0"
   date: "2026-08-04"
 
@@ -27,8 +27,13 @@ keywords:
   - "passive acoustic detection"
   - "bearing-only target motion analysis"
   - "extended Kalman filter"
+  - "passive sonar equation"
+  - "underwater acoustic propagation"
+  - "uniform linear array beamforming"
+  - "Cramer-Rao bound"
   - "Liparus-class tanker capture"
   - "submersible vehicle forensics"
+  - "pressure-hull collapse depth"
   - "deterministic simulation"
 
 metadata:

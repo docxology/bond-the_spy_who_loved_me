@@ -20,7 +20,8 @@ true trajectory, the TMA estimate, and the maneuvering ownship path.
 Against the canonical budget the passive sonar equation returns a detection
 range of {{ACO_DETECTION_RANGE_M}} metres (figure of merit {{ACO_FOM_DB}} dB)
 in a channel whose sound speed is {{ACO_SOUND_SPEED_M_S}} m/s and whose
-absorption is {{ACO_ABSORPTION_DB_KM}} dB/km at the 400 Hz scan tone.
+absorption is {{ACO_ABSORPTION_DB_KM}} dB/km at the {{ACO_FREQ_HZ}} Hz scan
+tone.
 @fig:sonar_detection_range shows how the solved range grows with the
 contact's source level.
 
@@ -28,11 +29,26 @@ contact's source level.
 
 ## Beamforming
 
-The {{BEAM_NUM_ELEMENTS}}-element ULA estimates the contact bearing to
-{{BEAM_BEARING_ERR_DEG}} degrees of the true bearing (estimate
-{{BEAM_ESTIMATE_DEG}} degrees), against a Cramer-Rao floor of
-{{BEAM_CRB_DEG}} degrees — the estimator is at the theoretical limit of
-precision for the array geometry and SNR. @fig:beamforming_response shows
+The {{BEAM_NUM_ELEMENTS}}-element ULA estimates the contact bearing at
+{{BEAM_ESTIMATE_DEG}} degrees, {{BEAM_BEARING_ERR_DEG}} degrees from truth,
+against a Cramer-Rao floor of {{BEAM_CRB_DEG}} degrees.
+
+That measured error must be read carefully rather than as a precision claim.
+`estimate_bearing_deg` is a peak search over a discrete scan grid of
+{{BEAM_SCAN_STEP_DEG}} degrees, so its output is quantised and its error
+cannot exceed {{BEAM_QUANTISATION_FLOOR_DEG}} degrees for any snapshot whose
+peak lands in the correct cell — *including* an error of exactly zero when,
+as in the canonical scenario, the true bearing
+({{BEAM_TRUE_BEARING_DEG}} degrees) falls on a grid node. A reported error
+below the Cramer-Rao bound is therefore an artefact of grid alignment, not
+evidence that the estimator beats the statistical floor, which no unbiased
+estimator can do. The honest statement is the two-sided one: the beamformer
+resolves the contact to within one scan cell, and the CRB of
+{{BEAM_CRB_DEG}} degrees — finite and comfortably below the
+{{BEAM_SCAN_STEP_DEG}}-degree grid — says the array geometry and SNR would
+support a finer estimate than this grid can express.
+`tests/test_beamforming.py` pins the quantisation property on *off-grid*
+bearings, where the artefact cannot hide it. @fig:beamforming_response shows
 the beamformer power response with the true and estimated bearings marked.
 
 ![ULA beamformer response vs bearing.](../output/figures/beamforming_response.png){#fig:beamforming_response}

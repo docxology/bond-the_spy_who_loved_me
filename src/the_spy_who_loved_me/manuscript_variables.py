@@ -22,14 +22,21 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+import tomllib
 import yaml
 
 from .scenario import run_canonical
 
-__all__ = ["generate_variables", "load_manuscript_config", "resolve_manuscript_tree"]
+__all__ = [
+    "coverage_floor_pct",
+    "generate_variables",
+    "load_manuscript_config",
+    "resolve_manuscript_tree",
+]
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CONFIG_PATH = PACKAGE_ROOT / "manuscript" / "config.yaml"
+DEFAULT_PYPROJECT_PATH = PACKAGE_ROOT / "pyproject.toml"
 
 _TOKEN_RE = re.compile(r"\{\{[A-Z0-9_]+\}\}")
 
@@ -49,6 +56,26 @@ def load_manuscript_config(config_path: str | Path | None = None) -> dict[str, A
             f"manuscript config must be a top-level mapping, got {type(data).__name__}"
         )
     return data
+
+
+def coverage_floor_pct(pyproject_path: str | Path | None = None) -> int:
+    """Read the enforced coverage floor from ``[tool.coverage.report]``.
+
+    The manuscript quotes this figure as the coverage gate. Reading it out of
+    ``pyproject.toml`` rather than typing it into prose means the claim is
+    bound to the gate that CI actually runs: lowering ``fail_under`` rewrites
+    the sentence instead of silently making it false.
+    """
+    path = Path(pyproject_path) if pyproject_path is not None else DEFAULT_PYPROJECT_PATH
+    if not path.is_file():
+        raise FileNotFoundError(f"pyproject.toml not found: {path}")
+    with path.open("rb") as handle:
+        data = tomllib.load(handle)
+    try:
+        value = data["tool"]["coverage"]["report"]["fail_under"]
+    except KeyError as exc:
+        raise KeyError("pyproject.toml has no [tool.coverage.report] fail_under") from exc
+    return int(value)
 
 
 def _canonical_metrics(require_outputs: bool) -> dict[str, Any]:
@@ -95,37 +122,61 @@ def generate_variables(
         "LIPARUS_VERSION": str(paper.get("version", "")),
         "LIPARUS_DATE": str(paper.get("date", "")),
         "NUM_CONCEPT_MODULES": str(NUM_CONCEPT_MODULES),
+        "COVERAGE_FLOOR_PCT": str(coverage_floor_pct()),
         "PYTHON_VERSION": platform.python_version(),
         "GENERATION_TIMESTAMP": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         # sub_tracking
         "SUB_NUM_BEARINGS": str(c["track_num_bearings"]),
         "SUB_TRACK_POS_ERR_M": f"{c['track_pos_err_m']:.1f}",
         "SUB_TRACK_VEL_ERR_M_S": f"{c['track_vel_err_m_s']:.1f}",
+        "SUB_TRACK_DURATION_S": f"{c['track_duration_s']:.0f}",
+        "SUB_TRACK_DT_S": f"{c['track_dt_s']:.0f}",
+        "SUB_TRACK_SPEED_M_S": f"{c['track_speed_m_s']:.0f}",
+        "SUB_TRACK_COURSE_DEG": f"{c['track_course_deg']:.0f}",
+        "SUB_TRACK_RANGE0_M": f"{c['track_range0_m']:.0f}",
+        "SUB_TRACK_BEARING_NOISE_DEG": f"{c['track_bearing_noise_deg']:.1f}",
         # tanker_capture
-        "TANKER_HOLD_LENGTH_M": str(c["tanker_hold_length_m"]),
-        "TANKER_MOUTH_WIDTH_M": str(c["tanker_mouth_width_m"]),
-        "TANKER_CLEARANCE_M": str(c["tanker_clearance_m"]),
+        "TANKER_HOLD_LENGTH_M": f"{c['tanker_hold_length_m']:.0f}",
+        "TANKER_MOUTH_WIDTH_M": f"{c['tanker_mouth_width_m']:.0f}",
+        "TANKER_MOUTH_HEIGHT_M": f"{c['tanker_mouth_height_m']:.0f}",
+        "TANKER_CLEARANCE_M": f"{c['tanker_clearance_m']:.1f}",
+        "TANKER_SUB_LENGTH_M": f"{c['tanker_sub_length_m']:.0f}",
         "TANKER_CAPTURE_TIME_S": f"{c['capture_time_s']:.0f}",
         "TANKER_STOWAGE": str(c["capture_stowage"]),
         # vehicle_forensics
         "FORENSICS_SCORE": f"{c['forensics_score']:.2f}",
         "FORENSICS_CLASS": str(c["forensics_class"]),
         "FORENSICS_MISSING_CRITICAL": str(c["forensics_missing_critical"]),
+        "VEHICLE_DRY_MASS_KG": f"{c['vehicle_dry_mass_kg']:.0f}",
+        "VEHICLE_DISPLACEMENT_M3": f"{c['vehicle_displacement_m3']:.1f}",
         # acoustics
         "ACO_ABSORPTION_DB_KM": f"{c['aco_absorption_db_km']:.4f}",
         "ACO_SOUND_SPEED_M_S": f"{c['aco_sound_speed_m_s']:.0f}",
         "ACO_DETECTION_RANGE_M": f"{c['aco_detection_range_m']:.0f}",
         "ACO_FOM_DB": f"{c['aco_fom_db']:.0f}",
+        "ACO_FREQ_HZ": f"{c['aco_freq_hz']:.0f}",
+        "ACO_SOURCE_LEVEL_DB": f"{c['aco_source_level_db']:.0f}",
+        "ACO_NOISE_LEVEL_DB": f"{c['aco_noise_level_db']:.0f}",
+        "ACO_DIRECTIVITY_DB": f"{c['aco_directivity_db']:.0f}",
+        "ACO_TEMP_C": f"{c['aco_temp_c']:.0f}",
+        "ACO_SALINITY_PSU": f"{c['aco_salinity_psu']:.0f}",
         # beamforming
         "BEAM_NUM_ELEMENTS": str(c["beam_num_elements"]),
+        "BEAM_TRUE_BEARING_DEG": f"{c['beam_true_bearing_deg']:.0f}",
         "BEAM_ESTIMATE_DEG": f"{c['beam_estimate_deg']:.1f}",
         "BEAM_BEARING_ERR_DEG": f"{c['beam_bearing_err_deg']:.1f}",
         "BEAM_CRB_DEG": f"{c['beam_crb_deg']:.2f}",
+        "BEAM_SNR_DB": f"{c['beam_snr_db']:.0f}",
+        "BEAM_SCAN_STEP_DEG": f"{c['beam_scan_step_deg']:.1f}",
+        "BEAM_QUANTISATION_FLOOR_DEG": f"{0.5 * float(c['beam_scan_step_deg']):.2f}",
         # hull_forensics
         "HULL_COLLAPSE_DEPTH_M": f"{c['hull_collapse_depth_m']:.0f}",
         "HULL_OPERATING_DEPTH_M": f"{c['hull_operating_depth_m']:.0f}",
         "HULL_SAFETY_FACTOR": f"{c['hull_safety_factor']:.2f}",
         "HULL_FEASIBLE": "yes" if c["hull_feasible"] else "no",
+        "HULL_RADIUS_M": f"{c['hull_radius_m']:.1f}",
+        "HULL_THICKNESS_MM": f"{c['hull_thickness_mm']:.0f}",
+        "HULL_YIELD_MPA": f"{c['hull_yield_mpa']:.0f}",
         "BALLAST_VOLUME_L": f"{c['ballast_volume_l']:.0f}",
     }
 

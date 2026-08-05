@@ -1,7 +1,7 @@
 """LIPARUS figure generation CLI.
 
 Thin wrapper around :func:`the_spy_who_loved_me.figures.build_all_figures`;
-renders the three concept figures to ``output/figures/``.
+renders the five concept figures to ``output/figures/``.
 """
 
 from __future__ import annotations

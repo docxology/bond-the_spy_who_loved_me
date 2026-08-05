@@ -80,7 +80,18 @@ produces a deterministic seeded snapshot; the conventional (delay-and-sum)
 beamformer ``P(theta) = |a(theta)^H x|^2`` (`beam_power`) is scanned by
 `estimate_bearing_deg` to locate the contact. `cramer_rao_bearing_std_deg`
 reports the Cramer-Rao lower bound on the bearing estimate — the theoretical
-floor the estimator cannot beat (Van Trees, *Optimum Array Processing*).
+floor the estimator cannot beat (Van Trees, *Optimum Array Processing*
+[@van_trees_2002]).
+
+Two properties of this estimator matter for reading Section @sec:results.
+First, the peak search runs over a *discrete* grid, so the estimate is
+quantised to the grid step and its measured error is floored at half a step
+regardless of array quality — the statistical bound reported by the CRB and
+the error achievable on this grid are different quantities, and on this
+scenario the latter is the binding one. Second, the element SNR passed to
+the CRB is derived in `scenario.py` from the snapshot amplitude and noise
+standard deviation rather than declared independently, so the bound always
+describes the array that was in fact sampled.
 
 ## Pressure-hull and ballast forensics
 

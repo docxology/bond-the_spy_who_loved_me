@@ -57,6 +57,24 @@ core keeps working if the path dependency ever fails.
    long-cylinder elastic buckling, governing collapse pressure/depth,
    design safety factor, and Archimedean ballast volume for neutral buoyancy.
 
+## Known modelling caveats
+
+Recorded here so no reader mistakes an artefact for a result:
+
+- **The beamformer's measured bearing error is grid-limited, not
+  CRB-limited.** `estimate_bearing_deg` peak-searches a 0.5-degree scan
+  grid, and the canonical true bearing (30 degrees) lands exactly on a grid
+  node, so the reported error is exactly zero — below the Cramer-Rao bound,
+  which no unbiased estimator can beat. Section 3 of the manuscript states
+  this explicitly and `tests/test_beamforming.py` pins the quantisation
+  property on off-grid bearings, where it can actually fail.
+- **Every model is first-order.** The propagation budget is
+  range-independent (no ray tracing, no profile, no boundary interaction);
+  the tracker assumes an ideal constant-velocity target and exactly known
+  ownship; the hull is an unstiffened long cylinder with no ring
+  stiffening, end caps, or out-of-roundness. `manuscript/
+  07_scope_and_related_work.md` enumerates the boundaries.
+
 ## Mission protocol
 
 `src/the_spy_who_loved_me/mission.py` implements the frozen
@@ -79,15 +97,28 @@ uv run python scripts/z_generate_manuscript_variables.py   # hydrate manuscript 
 
 ```bash
 uv run pytest tests/ --cov=src --cov-fail-under=90
-uv run ruff check src/ scripts/ tests/
-uv run ruff format src/ scripts/ tests/
-uv run mypy src/ scripts/
+uv run ruff check src/ scripts/ && uv run ruff format --check src/ scripts/
+uv run mypy src/
+uv run python scripts/mission_cli.py full                  # protocol still drivable
+uv run python scripts/z_generate_manuscript_variables.py   # every token still resolves
 rg -n "template[_]code_project" . --glob '!uv.lock' --glob '!.git/**' || echo Clean
 git status --short   # clean after a path-scoped commit
 ```
 
-Zero mocks; real data + computation only; ≥90% line+branch on `src/`;
-deterministic (fixed seeds, no untracked RNG).
+Zero mock framework; real data + computation only; deterministic (fixed
+seeds, no untracked RNG). Coverage is line **and** branch on `src/` at the
+floor declared by `[tool.coverage.report] fail_under` in `pyproject.toml` —
+that declaration is the single source of the figure, and the manuscript
+reads it through `manuscript_variables.coverage_floor_pct()` rather than
+restating it.
+
+The manuscript-hydration step is part of the gate, not a nicety: strict
+resolution is what proves every `{{TOKEN}}` in prose still has a generator
+behind it.
+
+If a `uv` command reports `Failed to initialize cache` or `Operation not
+permitted`, that is a sandbox restriction on the cache directory, not a
+package failure — re-run with the sandbox disabled.
 
 ## See also
 

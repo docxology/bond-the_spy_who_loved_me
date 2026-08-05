@@ -9,8 +9,8 @@ Mission Software**, a PROJECT BOND film package.
 |---|---|
 | `00_abstract.md` | Abstract with live result tokens |
 | `01_introduction.md` | Film context + package structure |
-| `02_methodology.md` | Algorithms: detector, TMA/EKF, capture, forensics |
-| `03_results.md` | Measured results + all three figures |
+| `02_methodology.md` | Algorithms: detector, TMA/EKF, acoustics, beamforming, capture, vehicle + hull forensics |
+| `03_results.md` | Measured results + all five figures |
 | `04_conclusion.md` | Summary |
 | `05_experimental_setup.md` | Canonical scenarios + mission identity |
 | `06_reproducibility.md` | Determinism, seeding, regeneration |
@@ -38,6 +38,8 @@ numbered sections exists in `generate_variables()`.
 | Label | File | Generator |
 |---|---|---|
 | `fig:bearing_track` | `output/figures/bearing_track.png` | `figures/plots.plot_bearing_track` |
+| `fig:sonar_detection_range` | `output/figures/sonar_detection_range.png` | `figures/plots.plot_sonar_detection_range` |
+| `fig:beamforming_response` | `output/figures/beamforming_response.png` | `figures/plots.plot_beamforming_response` |
 | `fig:capture_feasibility` | `output/figures/capture_feasibility.png` | `figures/plots.plot_capture_feasibility` |
 | `fig:conversion_readiness` | `output/figures/conversion_readiness.png` | `figures/plots.plot_conversion_readiness` |
 

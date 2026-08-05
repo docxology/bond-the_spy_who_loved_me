@@ -184,9 +184,15 @@ def classify_conversion(num_satisfied: int, missing: tuple[Requirement, ...]) ->
 
     * ``submersible`` — no critical requirement missing *and* at least half
       of all requirements satisfied;
-    * ``amphibious`` — at least one optional system satisfied (can wet its
-      wheels) but still missing a critical requirement;
-    * ``road-only`` — otherwise.
+    * ``amphibious`` — at least one requirement of *any* kind satisfied (the
+      conversion has started — it can wet its wheels) but still missing a
+      critical requirement;
+    * ``road-only`` — otherwise: nothing fitted at all, or too few
+      requirements satisfied to clear the submersible bar.
+
+    Note the ``amphibious`` predicate is ``num_satisfied > 0``, not "an
+    *optional* system is satisfied": a vehicle carrying only a pressure hull
+    is amphibious under this scheme.
     """
     missing_critical = any(r.critical for r in missing)
     any_satisfied = num_satisfied > 0

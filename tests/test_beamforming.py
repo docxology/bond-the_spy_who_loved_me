@@ -96,3 +96,49 @@ class TestCRB:
         # Near endfire the bound diverges.
         with pytest.raises(ValueError):
             cramer_rao_bearing_std_deg(8, 0.5, 10.0, math.pi / 2.0)
+
+
+class TestScanGridQuantisation:
+    """The peak search is grid-limited; pin that on *off-grid* bearings.
+
+    The canonical scenario places the true bearing at exactly 30 degrees,
+    which lands on a scan-grid node and yields a measured error of exactly
+    zero — below the Cramer-Rao bound, which no unbiased estimator can
+    achieve. That zero is an artefact of grid alignment, so asserting on it
+    would be a test that passes by construction. These tests use bearings
+    deliberately placed *between* grid nodes, where the quantisation floor
+    is visible and the assertion can actually fail.
+    """
+
+    #: Scan-grid step of ``estimate_bearing_deg`` when no grid is supplied.
+    SCAN_STEP_DEG = 0.5
+
+    def test_default_grid_step_is_the_documented_one(self) -> None:
+        snap = array_snapshot(math.radians(10.0), 0.5, 8, 1.0, 0.05, 3)
+        scan = estimate_bearing_deg(snap, 0.5).scan
+        steps = np.diff(scan)
+        assert np.allclose(steps, self.SCAN_STEP_DEG)
+
+    @pytest.mark.parametrize("true_deg", [12.3, -47.7, 30.25, 5.1, -0.3])
+    def test_off_grid_error_is_bounded_by_half_a_cell(self, true_deg: float) -> None:
+        snap = array_snapshot(math.radians(true_deg), 0.5, 16, 1.0, 0.05, 7)
+        est = estimate_bearing_deg(snap, 0.5).bearing_deg
+        # The estimate must snap to a grid node ...
+        assert math.isclose(est / self.SCAN_STEP_DEG, round(est / self.SCAN_STEP_DEG), abs_tol=1e-9)
+        # ... and be within half a cell of truth at this (high) SNR.
+        assert abs(est - true_deg) <= self.SCAN_STEP_DEG / 2.0 + 1e-9
+
+    def test_off_grid_error_is_nonzero_so_the_bound_is_not_vacuous(self) -> None:
+        """A truth strictly between nodes cannot be recovered exactly."""
+        true_deg = 12.3  # 12.3 / 0.5 is not an integer
+        snap = array_snapshot(math.radians(true_deg), 0.5, 16, 1.0, 0.05, 7)
+        est = estimate_bearing_deg(snap, 0.5).bearing_deg
+        assert abs(est - true_deg) > 0.0
+
+    def test_finer_grid_reduces_the_quantisation_error(self) -> None:
+        true_deg = 12.3
+        snap = array_snapshot(math.radians(true_deg), 0.5, 16, 1.0, 0.05, 7)
+        coarse = abs(estimate_bearing_deg(snap, 0.5).bearing_deg - true_deg)
+        fine_grid = np.arange(-90.0, 90.0 + 0.01, 0.01)
+        fine = abs(estimate_bearing_deg(snap, 0.5, fine_grid).bearing_deg - true_deg)
+        assert fine < coarse

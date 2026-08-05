@@ -1,88 +1,111 @@
 # the_spy_who_loved_me — LIPARUS TODO
 
-Forward-only backlog for the LIPARUS film package. Kept current as built;
-declared integration points are explicit so later BOND phases can bind
-without rework.
+Remaining work only. Completed phases live in git history, not here — a TODO
+that lists finished items stops being read.
 
-## Deep improvement (phase-4, current)
+## Open work
 
-Three new deterministic domain modules were added, deepening the submarine
-tracking and marine-forensics payload behind an unchanged `MissionProvider`:
+### 1. The beamformer's bearing estimate is grid-limited
 
-- `acoustics.py` — Thorp (1967) absorption, geometric-spreading transmission
-  loss, the passive sonar equation (`passive_sonar_equation`), a monotone
-  bisection detection-range solve, and the Mackenzie (1981) sound-speed
-  equation.
-- `beamforming.py` — ULA steering vectors, conventional delay-and-sum
-  beamformer, peak-search bearing estimation, and the Cramer-Rao bound on
-  bearing precision.
-- `hull_forensics.py` — hoop stress, long-cylinder elastic buckling, the
-  governing collapse pressure/depth, design safety factor, and Archimedean
-  ballast volume for neutral buoyancy.
-- `scenario.py` — canonical single source of truth (`run_canonical`) shared
-  by `mission.execute` and `manuscript_variables`, so outcome `results` and
-  manuscript `{{TOKEN}}`s can never disagree. `NUM_CONCEPT_MODULES` is now 6.
-- Two new figures (`beamforming_response`, `sonar_detection_range`); new
-  `{{TOKEN}}`s (ACO_*, BEAM_*, HULL_*, BALLAST_*); references.bib extended
-  with Urick, Thorp, Mackenzie, Van Trees, and Ross.
+`estimate_bearing_deg` peak-searches a fixed 0.5-degree scan grid, so its
+error can never fall below half a cell no matter how good the array or the
+SNR is. The canonical scenario's true bearing (30 degrees) sits exactly on a
+node, which makes the reported error exactly zero — visually excellent and
+statistically meaningless.
 
-Gate (measured): `uv run pytest tests/ --cov=src --cov-fail-under=90` at
-≥90% (target 98%+), 0 mocks, 0 skipped; `ruff check`/`format` + `mypy`
-clean; lineage `rg` clean; `git status` clean after commit.
+The manuscript and `docs/` now state this honestly rather than reading it as
+precision, and `tests/test_beamforming.py::TestScanGridQuantisation` pins
+the real property on off-grid bearings. What is *not* done is fixing the
+estimator.
 
-## Built (phase-1 conversion)
+- [ ] Add quadratic (three-point parabolic) interpolation around the peak so
+      the estimate is continuous rather than quantised and can approach the
+      Cramer-Rao bound.
+- [ ] Do this **additively** — a new function, or an opt-in keyword with the
+      current behaviour as default. `estimate_bearing_deg` is in the
+      `GADGETS` registry; changing what it returns for existing callers is a
+      cross-package break.
+- [ ] Acceptance: on an off-grid bearing at high SNR the interpolated error
+      is strictly smaller than the grid-search error and within a small
+      multiple of `cramer_rao_bearing_std_deg`.
 
-- **Pure domain core** in `src/the_spy_who_loved_me/`:
-  - `sub_tracking.py` — Neyman–Pearson energy detector (`detect_contract`,
-    `chi2_quantile`, `inverse_normal_cdf`), maneuvering-ownship scenario
-    (`simulate_target_track`), batch least-squares TMA (`estimate_tma`),
-    recursive EKF (`PassiveBearingTracker`), `tracking_rms_error`.
-  - `tanker_capture.py` — `clearance_metrics`, `classify_clearance`,
-    `stowage_capacity`, `simulate_capture` (4-phase discrete-event), plus
-    `CaptureRun`/`PhaseRecord`/`Clearance` result types.
-  - `vehicle_forensics.py` — `SUBMERSIBLE_REQUIREMENTS`, `assess_conversion`,
-    `classify_conversion`, `buoyancy_status`, `recommend_upgrades`.
-- **Frozen protocol adapter** `src/the_spy_who_loved_me/mission.py`:
-  `MissionProvider` (brief/recon/plan/execute/debrief) implementing
-  `bond_api`; registers 4 concept gadgets on a `GadgetRegistry` under slug
-  `the_spy_who_loved_me`. Discoverable via `bond_api.discovery`.
-- **Manuscript plumbing**: `manuscript/config.yaml` (LIPARUS identity) +
-  `src/the_spy_who_loved_me/manuscript_variables.py` (live `{{TOKEN}}`
-  metrics); numbered sections updated with LIPARUS tokens and figures.
-- **Figures** `src/the_spy_who_loved_me/figures/plots.py`: bearing-track,
-  capture-feasibility, conversion-readiness.
-- **Thin CLIs** `scripts/`: `mission_cli.py` (brief/recon/plan/execute/
-  debrief/full), `generate_figures.py`, `z_generate_manuscript_variables.py`.
-- **Tests** (deterministic, zero-mock) per module + manuscript token
-  cross-reference + script smoke.
-- **Gate** (measured): `uv run pytest tests/ --cov=src --cov-fail-under=90`
-  passes at ≥90% line+branch on `src/`; `ruff check`/`format` and `mypy`
-  clean; lineage `rg` clean; `git status` clean after commit.
+### 2. The EKF is implemented but never exercised by the canonical scenario
+
+`PassiveBearingTracker` is fully implemented and unit-tested, but
+`run_canonical()` only runs the batch `estimate_tma`. No manuscript result
+reports recursive-filter performance, so from the manuscript's point of view
+the EKF is dead weight.
+
+- [ ] Run the EKF over the same bearing sequence in `run_canonical()` and
+      report its steady-state RMS error as a token alongside the batch TMA
+      position error.
+- [ ] Acceptance: a results-section sentence comparing batch and recursive
+      accuracy on the same data, both from tokens.
+
+### 3. Detection is measured but not reported
+
+`run_canonical()` computes `detection_margin_db`, and the mission's
+`success` flag depends on `detected`, but the results section never states
+the detection outcome or its margin. A reader cannot tell at what
+false-alarm rate the contact was declared.
+
+- [ ] Add `DETECTION_MARGIN_DB` and the operating `P_FA` as tokens, and
+      write a short detection paragraph in `03_results.md`.
+
+### 4. Figure determinism is asserted only by file size
+
+`tests/test_figures.py` asserts each figure renders to a non-empty file. It
+does not assert that two renders of the same figure are byte-identical, so a
+matplotlib version bump or a stray timestamp in PNG metadata would pass
+unnoticed.
+
+- [ ] Render twice and compare content hashes, normalising any embedded
+      creation-date metadata.
+- [ ] Acceptance: the test fails if a non-deterministic element is
+      introduced into a plot.
+
+### 5. `input_hash` in the provenance is a constant string
+
+`mission.execute` attaches `input_hash="liparus-mission-input"`, a fixed
+literal. It therefore identifies the package, not the inputs, and would not
+change if the canonical scenario changed — which is the one thing an input
+hash exists to detect.
+
+- [ ] Hash the actual canonical parameter set (a stable serialisation of the
+      `scenario.py` constants) and use that.
+- [ ] Acceptance: editing any canonical parameter changes the hash;
+      re-running with unchanged parameters does not.
+- [ ] Coordinate with the `bond-api` owners first — if any consumer treats
+      `input_hash` as an opaque package identifier, this needs agreeing
+      across the fleet rather than changing unilaterally.
 
 ## Declared integration points
 
 1. **`bond-api` path dependency** is wired in `pyproject.toml`
    (`[tool.uv.sources] bond-api = { path = .../bond-api }`) and listed in
-   `[project] dependencies`. If the path dep ever fails, the pure core in
-   `src/the_spy_who_loved_me/` imports without it — only `mission.py` needs
-   `bond_api`. Acceptance: `uv run python -c "import bond_api, the_spy_who_loved_me.mission"`.
-2. **Fleet provenance helper** (`bond_utilities.mission_io.
-   record_provenance_outcome`) is not yet bound. When `bond-utilities` ships
-   a stable helper, `mission.py::execute` should call it to persist its
-   `MissionOutcome` record instead of the current local JSON write in
-   `scripts/mission_cli.py`. Acceptance: outcome record carries the same
-   `provenance` block (package_version, seed, input_hash).
-3. **Orchestrator discovery**: `bond-orchestrator` will discover this film by
-   slug via `bond_api.discovery`; the provider is exposed at module top level
-   in `mission.py` under `MissionProvider` with `film = "the_spy_who_loved_me"`.
-   Acceptance: `discover()` returns the provider and `run_mission` succeeds.
+   `[project] dependencies`. If the path dep ever fails, the pure core
+   imports without it — only `mission.py` needs `bond_api`. Acceptance:
+   `uv run python -c "import bond_api, the_spy_who_loved_me.mission"`.
+2. **Fleet provenance helper**
+   (`bond_utilities.mission_io.record_provenance_outcome`) is not yet bound.
+   When `bond-utilities` ships a stable helper, `mission.py::execute` should
+   call it to persist its `MissionOutcome` instead of the current local JSON
+   write in `scripts/mission_cli.py`. Acceptance: the outcome record carries
+   the same `provenance` block (package_version, seed, input_hash).
+3. **Orchestrator discovery**: `bond-orchestrator` discovers this film by
+   slug via `bond_api.discovery`; the provider is exposed at module top
+   level in `mission.py` as `MissionProvider` with
+   `film = "the_spy_who_loved_me"`. Acceptance: `discover()` returns the
+   provider and `run_mission` succeeds.
 
-## Verification commands
+## Verification
 
 ```bash
 uv run pytest tests/ --cov=src --cov-fail-under=90
-uv run ruff check src/ scripts/ tests/ && uv run ruff format src/ scripts/ tests/
-uv run mypy src/ scripts/
+uv run ruff check src/ scripts/ && uv run ruff format --check src/ scripts/
+uv run mypy src/
+uv run python scripts/mission_cli.py full
+uv run python scripts/z_generate_manuscript_variables.py
 rg -n "template[_]code_project" . --glob '!uv.lock' --glob '!.git/**' || echo Clean
 git status --short   # clean after a path-scoped commit
 ```

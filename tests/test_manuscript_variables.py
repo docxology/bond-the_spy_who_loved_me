@@ -8,12 +8,16 @@ from pathlib import Path
 import pytest
 import yaml
 
+from the_spy_who_loved_me import manuscript_variables as mv_module
 from the_spy_who_loved_me.manuscript_variables import (
     PACKAGE_ROOT,
+    _canonical_metrics,
+    coverage_floor_pct,
     generate_variables,
     load_manuscript_config,
     resolve_manuscript_tree,
 )
+from the_spy_who_loved_me.scenario import run_canonical
 
 _MANUSCRIPT = PACKAGE_ROOT / "manuscript"
 _TOKEN_RE = re.compile(r"\{\{([A-Z0-9_]+)\}\}")
@@ -112,3 +116,104 @@ def test_config_is_valid_yaml_mapping() -> None:
     with open(_MANUSCRIPT / "config.yaml", encoding="utf-8") as f:
         data = yaml.safe_load(f)
     assert isinstance(data, dict)
+
+
+class TestCoverageFloor:
+    """The coverage figure quoted in prose must come from the enforced gate."""
+
+    def test_matches_pyproject(self) -> None:
+        import tomllib
+
+        with open(PACKAGE_ROOT / "pyproject.toml", "rb") as handle:
+            data = tomllib.load(handle)
+        expected = int(data["tool"]["coverage"]["report"]["fail_under"])
+        assert coverage_floor_pct() == expected
+        assert generate_variables()["COVERAGE_FLOOR_PCT"] == str(expected)
+
+    def test_reads_an_explicit_file(self, tmp_path: Path) -> None:
+        proj = tmp_path / "pyproject.toml"
+        proj.write_text(
+            "[tool.coverage.report]\nfail_under = 77\n",
+            encoding="utf-8",
+        )
+        assert coverage_floor_pct(proj) == 77
+
+    def test_missing_file_raises(self, tmp_path: Path) -> None:
+        with pytest.raises(FileNotFoundError):
+            coverage_floor_pct(tmp_path / "absent.toml")
+
+    def test_missing_key_raises(self, tmp_path: Path) -> None:
+        proj = tmp_path / "pyproject.toml"
+        proj.write_text("[project]\nname = 'x'\n", encoding="utf-8")
+        with pytest.raises(KeyError):
+            coverage_floor_pct(proj)
+
+
+class TestStrictOutputGate:
+    """The ``require_outputs`` guards must be able to fire, not just exist.
+
+    Each guard is driven by feeding ``_canonical_metrics`` a degenerate
+    metric dict, so the gate is exercised rather than merely present.
+    """
+
+    def test_passes_on_the_real_canonical_run(self) -> None:
+        metrics = _canonical_metrics(require_outputs=True)
+        assert metrics["detected"] is True
+
+    @pytest.mark.parametrize(
+        ("key", "bad_value", "fragment"),
+        [
+            ("detected", False, "not detected"),
+            ("aco_detection_range_m", 0.0, "detection range"),
+            ("hull_feasible", False, "not feasible"),
+        ],
+    )
+    def test_each_guard_fires(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        key: str,
+        bad_value: object,
+        fragment: str,
+    ) -> None:
+        good = run_canonical()
+
+        def degenerate() -> dict[str, object]:
+            broken = dict(good)
+            broken[key] = bad_value
+            return broken
+
+        # Environment isolation only: the real algorithms still produce the
+        # baseline dict; a single field is degraded to prove the guard reads
+        # it. No mock framework is involved.
+        monkeypatch.setattr(mv_module, "run_canonical", degenerate)
+        with pytest.raises(ValueError, match=fragment):
+            _canonical_metrics(require_outputs=True)
+
+    def test_guards_are_skipped_in_draft_mode(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        good = run_canonical()
+
+        def degenerate() -> dict[str, object]:
+            broken = dict(good)
+            broken["detected"] = False
+            return broken
+
+        monkeypatch.setattr(mv_module, "run_canonical", degenerate)
+        assert _canonical_metrics(require_outputs=False)["detected"] is False
+
+
+class TestConfigValidation:
+    def test_non_mapping_config_rejected(self, tmp_path: Path) -> None:
+        bad = tmp_path / "config.yaml"
+        bad.write_text("- just\n- a list\n", encoding="utf-8")
+        with pytest.raises(ValueError, match="top-level mapping"):
+            load_manuscript_config(bad)
+
+    def test_missing_config_rejected(self, tmp_path: Path) -> None:
+        with pytest.raises(FileNotFoundError):
+            load_manuscript_config(tmp_path / "nope.yaml")
+
+    def test_non_mapping_paper_section_rejected(self, tmp_path: Path) -> None:
+        bad = tmp_path / "config.yaml"
+        bad.write_text("paper: not-a-mapping\n", encoding="utf-8")
+        with pytest.raises(ValueError, match="'paper' section"):
+            generate_variables(config_path=bad)

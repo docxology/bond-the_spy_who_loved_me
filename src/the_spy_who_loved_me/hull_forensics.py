@@ -19,8 +19,11 @@ pressure-vessel and naval-architecture formulas, all deterministic:
   neutral buoyancy (Archimedes), the figure of merit for "can this car
   actually dive?".
 
-These are the same first-order checks a conversion surveyor would run
-(Ross, *Mechanics of Underwater Noise*; Young, *Roark's Formulas*).
+These are the same first-order checks a conversion surveyor would run. The
+long-cylinder buckling expression is Timoshenko & Gere, *Theory of Elastic
+Stability* (2nd ed., 1961); the thin-wall hoop-stress and Archimedean
+relations are standard (Young & Budynas, *Roark's Formulas for Stress and
+Strain*; Tupper, *Introduction to Naval Architecture*).
 """
 
 from __future__ import annotations

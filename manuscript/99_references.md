@@ -7,8 +7,8 @@
    Electronic Systems*, AES-17(2), 162–166. [@nardone_aidala_1981]
 3. Anderson, B. D. O., & Moore, J. B. (1979). *Optimal Filtering*.
    Prentice Hall. [@anderson_moore_1979]
-4. Rahman, S. (2007). *Naval Architecture and Ocean Engineering*.
-   Springer. [@rahman_2007]
+4. Tupper, E. C. (2013). *Introduction to Naval Architecture* (5th ed.).
+   Butterworth-Heinemann. [@tupper_naval_2013]
 5. Urick, R. J. (1983). *Principles of Underwater Sound* (3rd ed.).
    McGraw-Hill. [@urick_principles_1983]
 6. Thorp, W. H. (1967). Analytic description of the low-frequency
@@ -20,5 +20,7 @@
 8. Van Trees, H. L. (2002). *Optimum Array Processing: Part IV of
    Detection, Estimation, and Modulation Theory*. Wiley-Interscience.
    [@van_trees_2002]
-9. Ross, C. T. F. (1976). *Mechanics of Underwater Noise*. Pergamon Press.
-   [@ross_mechanics_1976]
+9. Timoshenko, S. P., & Gere, J. M. (1961). *Theory of Elastic Stability*
+   (2nd ed.). McGraw-Hill. [@timoshenko_gere_1961]
+10. Young, W. C., Budynas, R. G., & Sadegh, A. M. (2011). *Roark's Formulas
+    for Stress and Strain* (8th ed.). McGraw-Hill. [@young_roark_2011]
