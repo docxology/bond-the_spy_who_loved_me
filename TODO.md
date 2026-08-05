@@ -1,133 +1,329 @@
-# the_spy_who_loved_me — LIPARUS TODO
+# TODO — the_spy_who_loved_me (LIPARUS)
 
-Remaining work only. Completed phases live in git history, not here — a TODO
-that lists finished items stops being read.
+LIPARUS is the PROJECT BOND film package for *The Spy Who Loved Me* (1977).
+Six pure domain modules model the film's engineering — passive acoustic
+detection and bearing-only tracking, underwater propagation and the passive
+sonar equation, ULA beamforming, Liparus-class tanker capture geometry,
+submersible conversion forensics, and pressure-hull collapse/ballast — and
+three support modules compose them: `scenario.py` (the canonical parameter
+set and `run_canonical()`), `manuscript_variables.py` (`{{TOKEN}}` hydration)
+and `mission.py` (the frozen `bond_api.MissionProvider` adapter). Local-only
+tree: no remote, no DOI, never pushed.
+
+**Verified state, measured 2026-08-05 on commit `0aa55c5`:**
+`uv run pytest tests/ --cov=src --cov-fail-under=90` → **215 passed**,
+**100.00%** line *and* branch coverage on `src/` (918 statements, 186
+branches, 0 missed). `ruff check`, `ruff format --check`, `mypy src/`,
+`scripts/mission_cli.py full` and `scripts/z_generate_manuscript_variables.py`
+all pass; working tree clean.
+
+Everything below is open. Finished work is in git history, not here.
+
+---
 
 ## Open work
 
-### 1. The beamformer's bearing estimate is grid-limited
+### Correctness — things that are wrong
 
-`estimate_bearing_deg` peak-searches a fixed 0.5-degree scan grid, so its
-error can never fall below half a cell no matter how good the array or the
-SNR is. The canonical scenario's true bearing (30 degrees) sits exactly on a
-node, which makes the reported error exactly zero — visually excellent and
-statistically meaningless.
+#### C1. The beamformer's bearing estimate is grid-quantised
 
-The manuscript and `docs/` now state this honestly rather than reading it as
-precision, and `tests/test_beamforming.py::TestScanGridQuantisation` pins
-the real property on off-grid bearings. What is *not* done is fixing the
-estimator.
+`estimate_bearing_deg` peak-searches a fixed 0.5-degree grid
+(`src/the_spy_who_loved_me/beamforming.py:118-120` `_scan_grid()`, consumed
+at `:132-138`) and returns the grid node with maximum power. Its error can
+therefore never fall below half a cell, no matter the array or the SNR. The
+canonical true bearing (30 degrees) lands exactly on a node, so the reported
+`beam_bearing_err_deg` is exactly 0.00 — below the Cramer-Rao bound, which no
+unbiased estimator can beat. The manuscript, `AGENTS.md` and
+`tests/test_beamforming.py::TestScanGridQuantisation` state this honestly and
+pin the property on off-grid bearings; the *estimator* is untouched.
 
-- [ ] Add quadratic (three-point parabolic) interpolation around the peak so
-      the estimate is continuous rather than quantised and can approach the
-      Cramer-Rao bound.
-- [ ] Do this **additively** — a new function, or an opt-in keyword with the
-      current behaviour as default. `estimate_bearing_deg` is in the
-      `GADGETS` registry; changing what it returns for existing callers is a
-      cross-package break.
-- [ ] Acceptance: on an off-grid bearing at high SNR the interpolated error
-      is strictly smaller than the grid-search error and within a small
-      multiple of `cramer_rao_bearing_std_deg`.
+- **Done looks like:** a three-point parabolic interpolation around the peak,
+  added **additively** — a new function or an opt-in keyword with the current
+  grid behaviour as the default. `estimate_bearing_deg` is registered in the
+  `GADGETS` registry (`src/the_spy_who_loved_me/mission.py`), so changing what
+  it returns for existing callers is a cross-package break.
+- **Closing condition:** on an off-grid true bearing at high SNR the
+  interpolated error is strictly smaller than the grid-search error and within
+  a small multiple of `cramer_rao_bearing_std_deg`, asserted by a test that
+  goes red if interpolation is removed.
+- **Command:** `uv run pytest tests/test_beamforming.py -v`
 
-### 2. The EKF is implemented but never exercised by the canonical scenario
+*Carried from the adversarial pass as unresolved.*
 
-`PassiveBearingTracker` is fully implemented and unit-tested, but
-`run_canonical()` only runs the batch `estimate_tma`. No manuscript result
-reports recursive-filter performance, so from the manuscript's point of view
-the EKF is dead weight.
+#### C2. The capture elapsed time is a declared constant, not a model
 
-- [ ] Run the EKF over the same bearing sequence in `run_canonical()` and
-      report its steady-state RMS error as a token alongside the batch TMA
-      position error.
-- [ ] Acceptance: a results-section sentence comparing batch and recursive
-      accuracy on the same data, both from tokens.
+`_PHASE_DURATIONS` (`src/the_spy_who_loved_me/tanker_capture.py:235`) is four
+uncited literals summing to 630 s. Nothing makes a phase duration depend on
+the submarine or the bay, so the reported `capture_time_s` is identical for a
+10 m boat and a 72 m one and carries no information about either.
 
-### 3. Detection is measured but not reported
+This is now labelled everywhere it appears — the module docstring
+(`tanker_capture.py:31-34`), `total_time_s`'s own docstring (`:186-192`),
+`manuscript/03_results.md:66-72`, `AGENTS.md`, and `data/claim_ledger.yaml`
+(`claim_id: capture-elapsed-time`, `source_tier: declared_constant`) — and
+`tests/test_tanker_capture.py::TestReportedTimeIsASchedule` pins it as a
+schedule. It is labelled, not fixed.
 
-`run_canonical()` computes `detection_margin_db`, and the mission's
-`success` flag depends on `detected`, but the results section never states
-the detection outcome or its margin. A reader cannot tell at what
-false-alarm rate the contact was declared.
+- **Done looks like:** either the phase durations are derived from the
+  geometry (an ingress transit at a stated tow speed, a seal cycle at a stated
+  actuation rate) with every rate traced to a cited source, or the timeline
+  leaves `manuscript/03_results.md` entirely.
+- **Closing condition:** `capture_time_s` changes when submarine length
+  changes, and the claim ledger entry stops being `declared_constant`.
+- **Command:** `uv run pytest tests/test_tanker_capture.py -v && uv run python -c "from the_spy_who_loved_me.scenario import run_canonical; print(run_canonical()['capture_time_s'])"`
 
-- [ ] Add `DETECTION_MARGIN_DB` and the operating `P_FA` as tokens, and
-      write a short detection paragraph in `03_results.md`.
+*Carried from the adversarial pass as unresolved.*
 
-### 4. Figure determinism is asserted only by file size
+#### C3. Two of the four capture phases carry no failing predicate
 
-`tests/test_figures.py` asserts each figure renders to a non-empty file. It
-does not assert that two renders of the same figure are byte-identical, so a
-matplotlib version bump or a stray timestamp in PNG metadata would pass
-unnoticed.
+`simulate_capture` (`src/the_spy_who_loved_me/tanker_capture.py:243`) records
+four phases. *approach* is unconditionally `True` (`:277`) and *hatch-seal* is
+unconditionally `True` whenever ingress passed (`:289`, note "seal integrity
+not modelled"), because no seal-integrity quantity exists anywhere in the
+package. The `seal_requirement` field that once gave the appearance of a seal
+predicate was removed rather than left as a dead conjunct — so the appearance
+is gone, but the two inert phases remain.
 
-- [ ] Render twice and compare content hashes, normalising any embedded
-      creation-date metadata.
-- [ ] Acceptance: the test fails if a non-deterministic element is
-      introduced into a plot.
+- **Done looks like:** either a seal-integrity quantity that can actually fail
+  (with a cited derivation for whatever it is computed from), or the sequence
+  collapses to the two phases that decide the outcome (ingress, secure).
+- **Closing condition:** every phase in the returned `CaptureRun.phases` has
+  at least one input that makes its `ok` field `False`, pinned by a test that
+  constructs that input for each phase.
+- **Command:** `uv run pytest tests/test_tanker_capture.py -v`
 
-### 5. The capture timeline is a declared constant, not a model
+*Carried from the adversarial pass as unresolved.*
 
-`tanker_capture._PHASE_DURATIONS` is four uncited numbers with no timing
-model behind them, and the reported `total_time_s` therefore carries no
-information about the submarine or the bay. This is now labelled honestly
-everywhere it appears (module docstring, `03_results.md`, `AGENTS.md`, the
-claim ledger) and pinned as a schedule by
-`tests/test_tanker_capture.py::TestReportedTimeIsASchedule` — but it is
-labelled, not fixed.
+#### C4. The persisted mission outcome drops its Provenance
 
-- [ ] Either derive phase durations from the geometry (an ingress transit at
-      a stated tow speed, a seal cycle at a stated actuation rate) with the
-      rates cited, or drop the timeline from the results section entirely.
-- [ ] Acceptance: `capture_time_s` changes with submarine length, and each
-      rate that drives it traces to a source.
+`scripts/mission_cli.py:6` says the CLI writes "outcome results to
+`output/data/mission_outcome.json` **for provenance**", but line 54 writes
+`json.dumps(outcome.results, ...)` — only the results map. The `Provenance`
+block (`package_version`, `seed`, `input_hash`) is printed to stdout by
+`_print_json(outcome)` and then discarded. `manuscript/06_reproducibility.md:20-28`
+and `manuscript/03_results.md:107-109` present the input hash as what lets an
+outcome "be audited without re-execution"; the artefact that would be audited
+does not contain it. `tests/test_scripts_smoke.py:28-33` only asserts the file
+exists and contains `"detected"`, so nothing catches this.
 
-### 6. Two of the four capture phases test nothing
+- **Done looks like:** the persisted JSON carries the provenance block
+  alongside the results (or the docstring and the two manuscript sentences are
+  narrowed to what is actually written).
+- **Closing condition:** a smoke-test assertion that the written file parses
+  and contains a non-empty `input_hash` equal to
+  `scenario.canonical_input_hash()`.
+- **Command:** `uv run python scripts/mission_cli.py execute --out /tmp/liparus_outcome.json && uv run python -c "import json;print(sorted(json.load(open('/tmp/liparus_outcome.json'))))"`
 
-*approach* always succeeds and *hatch-seal* succeeds whenever ingress did,
-because no seal-integrity quantity exists anywhere in the package. The
-`seal_requirement` field that gave the appearance of a seal predicate has
-been removed rather than left as a dead conjunct.
+### Verification — claims not yet bound by a test that can fail
 
-- [ ] Either model a seal-integrity quantity that can fail (and cite what it
-      is derived from), or collapse the sequence to the two phases that
-      actually decide the outcome.
-- [ ] Acceptance: every phase in the returned timeline has an input that
-      makes it fail.
+#### V1. The EKF accuracy bound is empirical, not derived
 
-### 7. The EKF's accuracy bound is empirical, not derived
+`tests/test_sub_tracking.py:195-210`
+(`TestEkfActuallyEstimates::test_filter_tracks_the_target`) bounds the
+steady-state RMS error at `0.09 * mean_range_m`. The docstring is honest about
+where 0.09 came from: it sits between the measured correct behaviour (8.0% of
+mean range with `R = sigma**2`) and the measured units-bug behaviour (9.9%
+with `R = sigma`). It is a real, proven-failable gate — but the number is
+calibrated to observation, not derived from the filter's own uncertainty
+claim.
 
-`TestEkfActuallyEstimates` bounds the steady-state error at 9% of mean target
-range, a threshold chosen to sit between the measured correct behaviour
-(8.0%) and the measured units-bug behaviour (9.9%). It is a real gate, but
-the number is calibrated to observation rather than to theory.
+- **Done looks like:** a consistency check (normalised estimation error
+  squared / NEES) comparing the filter's reported covariance `P` against its
+  actual error, so the bound follows from theory rather than from two
+  measurements.
+- **Closing condition:** reintroducing `self._r = float(measurement_noise_rad)`
+  (dropping the square at `src/the_spy_who_loved_me/sub_tracking.py:504`) still
+  fails the suite, and the assertion's threshold is a chi-square quantile
+  rather than a hand-picked ratio.
+- **Command:** `uv run pytest tests/test_sub_tracking.py::TestEkfActuallyEstimates -v`
 
-- [ ] Compare the filter's reported covariance against its actual error
-      (a normalised estimation error squared / consistency check) so the
-      bound follows from the filter's own uncertainty claim.
+*Carried from the adversarial pass as unresolved.*
 
-## Declared integration points
+#### V2. The claim ledger's `value` and `artifact_path` fields are never checked
 
-1. **`bond-api` path dependency** is wired in `pyproject.toml`
-   (`[tool.uv.sources] bond-api = { path = .../bond-api }`) and listed in
-   `[project] dependencies`. If the path dep ever fails, the pure core
-   imports without it — only `mission.py` needs `bond_api`. Acceptance:
-   `uv run python -c "import bond_api, the_spy_who_loved_me.mission"`.
-2. **Fleet provenance helper**
-   (`bond_utilities.mission_io.record_provenance_outcome`) is not yet bound.
-   When `bond-utilities` ships a stable helper, `mission.py::execute` should
-   call it to persist its `MissionOutcome` instead of the current local JSON
-   write in `scripts/mission_cli.py`. Acceptance: the outcome record carries
-   the same `provenance` block (package_version, seed, input_hash).
-   Note for that conversation: `input_hash` is no longer the fixed literal
-   `"liparus-mission-input"` — it is now a SHA-256 over the canonical
-   parameter set, so any fleet consumer that treated it as an opaque package
-   identifier will see a different (and now varying) value.
-3. **Orchestrator discovery**: `bond-orchestrator` discovers this film by
-   slug via `bond_api.discovery`; the provider is exposed at module top
-   level in `mission.py` as `MissionProvider` with
-   `film = "the_spy_who_loved_me"`. Acceptance: `discover()` returns the
-   provider and `run_mission` succeeds.
+`data/claim_ledger.yaml` records six claims, each with a `value` (`0.001`,
+`1.5`, `140`, `630`, or `generated`) and an `artifact_path`. The two gates that
+read it — `tests/test_repo_contracts.py:350` and `:362` — verify only that the
+`source` path exists and that its identifier-shaped symbols appear in that
+file. Editing `clearance_m` from 1.5 to 2.0 in `scenario.py` leaves the ledger
+saying 1.5 and the whole suite green. The `artifact_path` entries are not
+checked at all.
+
+- **Done looks like:** a gate that resolves each numeric `value` against the
+  live `run_canonical()` metric or the named source symbol, and that fails when
+  they disagree.
+- **Closing condition:** temporarily changing one ledger `value` turns
+  `tests/test_repo_contracts.py` red.
+- **Command:** `uv run pytest tests/test_repo_contracts.py::TestDocsAgreeWithTheRun -v`
+
+#### V3. The version cross-check misses three declaration sites
+
+`tests/test_repo_contracts.py:128-148`
+(`TestVersionIsDeclaredOnce`) cross-checks seven declarations against
+`pyproject.toml`. Three more sites declare `0.1.0` and are outside the gate:
+`manuscript/config.yaml.example:8` and `:32`,
+`manuscript/AGENTS.md:4`, and `.agents/skills/the-spy-who-loved-me/SKILL.md:4`.
+The class docstring says "six declaration sites"; there are nine.
+
+- **Done looks like:** the gate discovers version declarations rather than
+  enumerating them, or the three sites are added and the docstring's count
+  corrected.
+- **Closing condition:** bumping `pyproject.toml`'s version without updating
+  `SKILL.md` fails the suite.
+- **Command:** `uv run pytest tests/test_repo_contracts.py::TestVersionIsDeclaredOnce -v`
+
+#### V4. Figure determinism is asserted only by existence and size
+
+`tests/test_figures.py:23-35` asserts each of the five figures renders to a
+non-empty file whose name contains the figure key. It never asserts that two
+renders of the same figure are byte-identical, so a matplotlib version bump or
+an embedded creation timestamp in PNG metadata would pass unnoticed — while
+`manuscript/06_reproducibility.md:5-9` claims byte-identical results. (The
+*variable map* is pinned by
+`tests/test_manuscript_variables.py::TestPersistedArtefactIsDeterministic`;
+the figures are not.)
+
+- **Done looks like:** render each figure twice into `tmp_path` and compare
+  content hashes, normalising any embedded creation-date metadata.
+- **Closing condition:** the test fails when a non-deterministic element (a
+  timestamp, an unseeded jitter) is introduced into a plot.
+- **Command:** `uv run pytest tests/test_figures.py -v`
+
+### Documentation
+
+#### D1. Detection is measured but never reported
+
+`run_canonical()` returns `detected` and `detection_margin_db`
+(`src/the_spy_who_loved_me/scenario.py:239-240`), and the mission's `success`
+flag depends on `detected`
+(`manuscript/03_results.md:105`). No results-section sentence states the
+detection outcome, its margin, or the operating `P_FA` (0.001, per
+`data/claim_ledger.yaml` and `sub_tracking.DetectionConfig`). A reader cannot
+tell at what false-alarm rate the contact was declared.
+
+- **Done looks like:** `DETECTION_MARGIN_DB`, `DETECTED` and `P_FA` added as
+  tokens in `manuscript_variables.generate_variables()`, and a short detection
+  paragraph in `manuscript/03_results.md` that uses them.
+- **Closing condition:** every new token resolves under strict hydration and
+  no detection number is typed into prose.
+- **Command:** `uv run python scripts/z_generate_manuscript_variables.py`
+
+#### D2. `docs/README.md`'s verification block omits `tests/` from the lint scope
+
+`docs/README.md:55` gives `uv run ruff check src/ scripts/ && uv run ruff
+format --check src/ scripts/`, and calls those three commands "the whole
+gate". `README.md:81` and `AGENTS.md:121` both include `tests/`. The docs/
+copy would let a lint failure in `tests/` pass a reader's check.
+
+- **Done looks like:** `docs/README.md:55` matches the other two.
+- **Command:** `grep -n "ruff check" README.md AGENTS.md docs/README.md` — all
+  three identical.
+
+#### D3. `.agents/` still frames the package as a template exemplar
+
+`.agents/README.md:4,12,14`, `.agents/skills/README.md:9,12`,
+`.agents/skills/AGENTS.md:8` and
+`.agents/skills/the-spy-who-loved-me/AGENTS.md:3,15,16` describe this as "this
+exemplar" and invite the reader to "Fork this exemplar as a starting scaffold".
+It is a film package, not a template exemplar; `SKILL.md` itself was already
+rewritten but these siblings were not.
+`tests/test_repo_contracts.py::TestNoExemplarBoilerplate` does not match the
+word "exemplar" (deliberately — it matches optimizer-specific boilerplate), so
+this is prose drift, not a gate failure.
+
+- **Done looks like:** the four `.agents/` documents describe the package as
+  what it is, with no fork-this-scaffold framing.
+- **Command:** `grep -rn exemplar .agents/` returns nothing outside a
+  historical note.
+
+### Extension — genuine future work
+
+#### E1. The EKF is implemented, tested, and never reaches the manuscript
+
+`PassiveBearingTracker` (`src/the_spy_who_loved_me/sub_tracking.py:470`)
+is fully implemented and unit-tested, but `run_canonical()`
+(`src/the_spy_who_loved_me/scenario.py:178-236`) runs only the batch
+`estimate_tma`. No manuscript result reports recursive-filter performance, so
+from the manuscript's point of view the EKF is dead weight.
+
+- **Done looks like:** `run_canonical()` runs the EKF over the same bearing
+  sequence and returns its steady-state RMS error as a metric; a
+  results-section sentence compares batch and recursive accuracy on the same
+  data, both from tokens.
+- **Command:** `uv run python scripts/z_generate_manuscript_variables.py && uv run pytest tests/test_scenario.py -v`
+
+#### E2. Fleet provenance helper is not yet bound
+
+`bond_utilities.mission_io.record_provenance_outcome` is not called anywhere
+here. When `bond-utilities` ships a stable helper, `mission.py::execute` (or
+`scripts/mission_cli.py:50-54`) should persist its `MissionOutcome` through it
+instead of the current local JSON write. Related to **C4** — fix C4 first or
+fix it *by* doing this.
+
+- **Done looks like:** the outcome record written by the fleet helper carries
+  the same `provenance` block (`package_version`, `seed`, `input_hash`).
+- **Note for whoever takes it:** `input_hash` is no longer the fixed literal
+  `"liparus-mission-input"` — it is a SHA-256 over the canonical parameter set
+  (`scenario.canonical_input_hash`), so any fleet consumer that treated it as
+  an opaque package identifier will see a different, and now varying, value.
+- **Command:** `uv run python -c "import bond_utilities.mission_io"` (currently
+  the blocker) then `uv run python scripts/mission_cli.py execute`.
+
+---
+
+## Known limitations (not bugs)
+
+Accepted and out of scope. Recorded so they are not re-litigated.
+
+- **No publication identity, by design.** No remote, no DOI reserved or
+  deposited, no PyPI/Zenodo/HuggingFace/OSF/IPFS/Software Heritage presence,
+  no release tag. `CITATION.cff`, `codemeta.json` and `.zenodo.json` are
+  *prepared* metadata for a deposit that has not happened.
+  `tests/test_repo_contracts.py::TestNoFabricatedPublicationIdentity` keeps it
+  that way. See `STANDALONE.md`.
+- **The TMA grid initialiser is tuned to the canonical scenario, and that is a
+  soft limit.** Its default envelope (3000–6500 m, 5–35 m/s) brackets the
+  canonical truth of 4000 m / 25 m/s. The audit stated a target outside the
+  envelope "cannot be initialised"; that mechanism is wrong — Gauss-Newton
+  escapes a poor seed, and a 15 km target still recovers to 293 m. Degradation
+  becomes binding around 60 km (42% range error). Both directions are pinned by
+  `tests/test_sub_tracking.py::TestCoarseSearchEnvelope` (`:246`, `:253`,
+  `:259`), including the deliberate non-failure at 15 km so the caveat is not
+  overclaimed in reverse. Canonical tracking accuracy is still not evidence
+  about arbitrary geometry.
+- **`output/` is gitignored, so regenerated artefacts are not committed
+  evidence.** They are byte-identical across runs, but the committed evidence
+  is the code and the gates, not the artefacts. Do not add `output/` to git to
+  "prove" determinism — prove it with the determinism tests.
+- **`PYTHON_VERSION` makes the variable map byte-identical per interpreter,
+  not universally.** It is the single environment-dependent token
+  (`src/the_spy_who_loved_me/manuscript_variables.py:144`). It is not
+  wall-clock — the value is fixed for a given interpreter — and
+  `06_reproducibility.md:12` says so. A `GENERATION_TIMESTAMP` token used to
+  sit beside it and was removed.
+- **Signal excess is not SNR, and the package now says so.**
+  `passive_sonar_equation` returns `SL - TL - (NL - DI) - DT`, which is signal
+  excess; `signal_to_noise_ratio_db` is the separate, larger quantity. The
+  field was named `snr_db` until the two were separated. This is settled, not
+  open.
+- **Every model is first-order.** Range-independent propagation (no ray
+  tracing, no sound-speed profile, no boundary interaction); an ideal
+  constant-velocity target with exactly known ownship; an unstiffened long
+  cylinder with no ring stiffening, end caps, or out-of-roundness.
+  `manuscript/07_scope_and_related_work.md` enumerates the boundaries.
+- **The `bond_api` path dependency is optional to the core.** Only
+  `mission.py` imports the protocol; the six concept modules import without
+  it. Verify with
+  `uv run python -c "import bond_api, the_spy_who_loved_me.mission"`.
+  Orchestrator discovery finds this film by slug via `bond_api.discovery`;
+  `MissionProvider` is exposed at module top level in `mission.py` with
+  `film = "the_spy_who_loved_me"`.
+
+---
 
 ## Verification
+
+Run from the package root. All five must pass before any commit.
 
 ```bash
 uv run pytest tests/ --cov=src --cov-fail-under=90
@@ -135,10 +331,23 @@ uv run ruff check src/ scripts/ tests/ && uv run ruff format --check src/ script
 uv run mypy src/
 uv run python scripts/mission_cli.py full
 uv run python scripts/z_generate_manuscript_variables.py
-git status --short   # clean after a path-scoped commit
+git status --short   # empty after a path-scoped commit
 ```
 
-The documentation gates (lineage, layer contract, versions, figure
-registries, publication identity) are in `tests/test_repo_contracts.py` and
-run with the suite; the `rg`-based lineage one-liner that used to sit here
-could not fail and did not match the boilerplate it was aimed at.
+**Expected outcomes as of 2026-08-05 / `0aa55c5`:** 215 passed, 100.00%
+coverage (floor 90, line + branch); `All checks passed!` and `33 files already
+formatted`; `Success: no issues found in 13 source files`; the mission CLI
+prints the five phase objects and exits 0; hydration resolves every
+`{{TOKEN}}` under strict mode and exits 0; `git status --short` empty.
+
+The documentation gates — lineage/boilerplate, layer contract, version
+cross-check, figure registries, publication identity, and `AGENTS.md`'s
+hardcoded scenario numbers — live in `tests/test_repo_contracts.py` and run
+inside the first command. There is no separate `rg` one-liner; the one that
+used to be documented here could not fail (`rg` exits non-zero on *no* match,
+so `|| echo Clean` fired on success) and did not match the boilerplate it was
+aimed at.
+
+If `uv` reports `Failed to initialize cache` or `Operation not permitted`,
+that is a sandbox restriction on the `uv` cache directory, not a package
+failure — re-run with the sandbox disabled.
