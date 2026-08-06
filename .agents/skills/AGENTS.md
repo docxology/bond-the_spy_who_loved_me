@@ -5,7 +5,7 @@ One folder per skill. Each ships `AGENTS.md`, `README.md`, `SKILL.md`.
 
 | Skill | Purpose |
 | --- | --- |
-| [`the-spy-who-loved-me/`](the-spy-who-loved-me/AGENTS.md) | Drive this exemplar end-to-end. |
+| [`the-spy-who-loved-me/`](the-spy-who-loved-me/AGENTS.md) | Drive this film package end-to-end. |
 
 ## Skill contract
 

@@ -11,12 +11,18 @@ Every parameter below is a substitution token read back out of
 `src/the_spy_who_loved_me/scenario.py`, the module that actually configures
 the run — the prose cannot describe a scenario the code did not execute.
 
-* **Passive tracking**: a {{SUB_TRACK_DURATION_S}}-second scenario at a
-  {{SUB_TRACK_DT_S}}-second cadence, yielding {{SUB_NUM_BEARINGS}} bearing
+* **Detection**: the Neyman-Pearson energy detector is run at a
+  false-alarm probability of {{DETECTION_P_FA}} (a fixed seeded waveform).
+* **Passive tracking (batch)**: a {{SUB_TRACK_DURATION_S}}-second scenario at
+  a {{SUB_TRACK_DT_S}}-second cadence, yielding {{SUB_NUM_BEARINGS}} bearing
   samples; the target travels at {{SUB_TRACK_SPEED_M_S}} m/s on course
   {{SUB_TRACK_COURSE_DEG}}° from an initial range of {{SUB_TRACK_RANGE0_M}} m;
   the ownship runs a deterministic dogleg (east then north); relative
   bearings are corrupted by {{SUB_TRACK_BEARING_NOISE_DEG}}° of seeded noise.
+* **Passive tracking (recursive)**: the extended Kalman filter is seeded with
+  a coarse initial guess (the batch solution would be an oracle here) and a
+  constant-velocity transition; its steady-state error is reported in Section
+  @sec:results alongside the batch result.
 * **Liparus capture**: a {{TANKER_HOLD_LENGTH_M}} m hold,
   {{TANKER_MOUTH_WIDTH_M}} m × {{TANKER_MOUTH_HEIGHT_M}} m mouth, and
   {{TANKER_CLEARANCE_M}} m required clearance swallowing a
@@ -34,6 +40,9 @@ the run — the prose cannot describe a scenario the code did not execute.
   The element SNR is *derived* from the snapshot amplitude and noise standard
   deviation rather than declared separately, so the Cramer-Rao bound in
   Section @sec:results always describes the array that was actually sampled.
+  The grid estimate is the canonical (honest) one; the parabolic refinement
+  described in Section @sec:results is an opt-in alternative, not the default,
+  so the grid-limitation result is reproducible and the two are comparable.
 * **Pressure hull**: a {{HULL_RADIUS_M}} m radius, {{HULL_THICKNESS_MM}} mm
   steel ({{HULL_YIELD_MPA}} MPa yield) cylinder operating at
   {{HULL_OPERATING_DEPTH_M}} m depth.

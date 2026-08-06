@@ -1,7 +1,7 @@
 # .agents — README.md
 
 Agent-facing orientation for the project-local agent scaffolding in this
-exemplar.
+film package.
 
 | File | Purpose |
 | --- | --- |
@@ -9,6 +9,6 @@ exemplar.
 | [`skills/`](skills/README.md) | Project-local skill catalog (`SKILL.md` + `AGENTS.md` + `README.md` per skill). |
 
 Start with [`skills/the-spy-who-loved-me/SKILL.md`](skills/the-spy-who-loved-me/SKILL.md)
-when working inside this exemplar — it carries when-to-use guidance, quick
+when working inside this package — it carries when-to-use guidance, quick
 reference commands, and pitfalls. The technical contract for the whole
-exemplar is [`../AGENTS.md`](../AGENTS.md).
+package is [`../AGENTS.md`](../AGENTS.md).

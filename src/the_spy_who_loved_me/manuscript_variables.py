@@ -142,8 +142,13 @@ def generate_variables(
         # in the manuscript consumed it and it falsified the determinism
         # claim in ``manuscript/06_reproducibility.md``.
         "PYTHON_VERSION": platform.python_version(),
-        # sub_tracking
+        # sub_tracking — detection
+        "DETECTED": "yes" if c["detected"] else "no",
+        "DETECTION_MARGIN_DB": f"{c['detection_margin_db']:.1f}",
+        "DETECTION_P_FA": f"{c['detection_p_fa']:.3f}",
+        # sub_tracking — batch TMA + recursive EKF
         "SUB_NUM_BEARINGS": str(c["track_num_bearings"]),
+        "SUB_TRACK_EKF_RMS_M": f"{c['track_ekf_rms_m']:.1f}",
         "SUB_TRACK_POS_ERR_M": f"{c['track_pos_err_m']:.1f}",
         "SUB_TRACK_VEL_ERR_M_S": f"{c['track_vel_err_m_s']:.1f}",
         "SUB_TRACK_DURATION_S": f"{c['track_duration_s']:.0f}",
@@ -185,6 +190,8 @@ def generate_variables(
         "BEAM_TRUE_BEARING_DEG": f"{c['beam_true_bearing_deg']:.0f}",
         "BEAM_ESTIMATE_DEG": f"{c['beam_estimate_deg']:.1f}",
         "BEAM_BEARING_ERR_DEG": f"{c['beam_bearing_err_deg']:.1f}",
+        "BEAM_BEARING_ERR_INTERP_DEG": f"{c['beam_bearing_err_interp_deg']:.3f}",
+        "BEAM_ESTIMATE_INTERP_DEG": f"{c['beam_estimate_interp_deg']:.2f}",
         "BEAM_CRB_DEG": f"{c['beam_crb_deg']:.2f}",
         "BEAM_SNR_DB": f"{c['beam_snr_db']:.0f}",
         "BEAM_SCAN_STEP_DEG": f"{c['beam_scan_step_deg']:.1f}",

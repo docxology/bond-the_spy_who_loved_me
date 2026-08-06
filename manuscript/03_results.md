@@ -6,14 +6,33 @@ reproducible exactly. One of them — the capture timeline under *Liparus
 capture* — is a **declared constant** rather than a computed quantity, and is
 labelled as such where it appears. The rest are measured.
 
+## Detection
+
+The Neyman-Pearson energy detector is the gate the whole
+downstream tracking chain stands behind: every conclusion below presupposes a
+contact was heard at all. On the canonical waveform the detector declares the
+contact **{{DETECTED}}**, with a statistic-to-threshold margin of
+{{DETECTION_MARGIN_DB}} dB at a false-alarm probability of {{DETECTION_P_FA}}.
+The margin is the number that matters operationally — how far the peak energy
+statistic sits above the threshold the detector was asked to hold — and the
+false-alarm probability is the operating point it was required to meet. No
+other number in this section is meaningful if that predicate is false.
+
 ## Passive tracking
 
 The canonical scenario observes a constant-velocity submarine over
 {{SUB_NUM_BEARINGS}} bearing samples. Batch target motion analysis recovers
 the quarry's initial position to within {{SUB_TRACK_POS_ERR_M}} metres of
 truth (velocity error {{SUB_TRACK_VEL_ERR_M_S}} m/s) — well inside the
-operating envelope of the tracking geometry. @fig:bearing_track overlays the
-true trajectory, the TMA estimate, and the maneuvering ownship path.
+operating envelope of the tracking geometry.
+
+The matching recursive extended Kalman filter runs the *same* bearing
+sequence and settles to a steady-state position error of
+{{SUB_TRACK_EKF_RMS_M}} metres. The two numbers are not competing claims but
+one pipeline at two latencies: the batch estimate is the offline maximum-likelihood
+answer (here the tighter of the two), while the filter is what a real receiver
+could produce in real time as the bearings arrive. @fig:bearing_track overlays
+the true trajectory, the TMA estimate, and the maneuvering ownship path.
 
 ![Passive bearing-only tracking: true track vs TMA estimate and ownship path.](../output/figures/bearing_track.png){#fig:bearing_track}
 
@@ -50,8 +69,20 @@ resolves the contact to within one scan cell, and the CRB of
 {{BEAM_SCAN_STEP_DEG}}-degree grid — says the array geometry and SNR would
 support a finer estimate than this grid can express.
 `tests/test_beamforming.py` pins the quantisation property on *off-grid*
-bearings, where the artefact cannot hide it. @fig:beamforming_response shows
-the beamformer power response with the true and estimated bearings marked.
+bearings, where the artefact cannot hide it. The opt-in parabolic refinement
+(`estimate_bearing_deg(..., interpolate=True)`) exists precisely to approach
+the CRB rather than stay floored at the grid: it fits a parabola through the
+peak node and its neighbours and reports the apex. On the canonical (grid
+aligned) true bearing the grid reports an error of exactly zero — a
+snapshot-noise artefact of the node landing on the truth — while the refined
+estimate settles at {{BEAM_BEARING_ERR_INTERP_DEG}} degrees, a sub-cell
+residual it can actually achieve against the {{BEAM_CRB_DEG}} degree floor.
+The two errors are therefore reported as what they are: the grid figure is
+what this grid commits the estimator to, the refined figure is what the
+estimator itself can reach, and the off-grid tests in `test_beamforming.py`
+show the refinement strictly beating the grid where the grid is genuinely
+limited. @fig:beamforming_response shows the beamformer power response with
+the true and estimated bearings marked.
 
 ![ULA beamformer response vs bearing.](../output/figures/beamforming_response.png){#fig:beamforming_response}
 

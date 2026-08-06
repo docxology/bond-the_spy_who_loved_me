@@ -8,7 +8,11 @@ LIPARUS is reproducible by construction.
   interpreter yields byte-identical results, which
   `tests/test_manuscript_variables.py::TestPersistedArtefactIsDeterministic`
   enforces by regenerating the variable map twice and comparing it, and by
-  rejecting any token whose value parses as a timestamp. The single
+  rejecting any token whose value parses as a timestamp. The *figures* are
+  likewise byte-identical across renders —
+  `tests/test_figures.py::TestFigureDeterminism` renders `build_all_figures()`
+  twice and compares the PNG bytes, so a matplotlib bump or an embedded
+  creation stamp fails the suite rather than silently falsifying this claim. The single
   environment-dependent token is `PYTHON_VERSION`, which is reported in
   Section @sec:setup precisely so a reader can tell which interpreter a given
   artefact came from; the claim is byte-identity per interpreter, not across
@@ -29,6 +33,20 @@ LIPARUS is reproducible by construction.
   `tests/test_scenario.py::TestCanonicalInputHash` perturbs every parameter
   in turn and asserts the digest moves, so a parameter that stops reaching
   the hash fails the suite.
+* **Persisted provenance**: the `mission_cli` ``execute`` artefact
+  (`output/data/mission_outcome.json`) now carries the outcome's full
+  `Provenance` block — package version, seed, and the input hash — alongside
+  the results, so the hash this section describes is actually in the artefact
+  a reader would audit. It used to be printed to stdout and then discarded;
+  `tests/test_scripts_smoke.py` asserts the written file resolves the hash to
+  `scenario.canonical_input_hash()`.
+* **Docs bound to the run**: the claim ledger's numeric `value`s are resolved
+  against the live canonical metrics (or the declared schedule) by
+  `tests/test_repo_contracts.py::TestDocsAgreeWithTheRun`, and the package
+  version is cross-checked across every declaration site including the
+  manuscript `AGENTS.md`, `config.yaml.example` and the agent `SKILL.md` — so
+  a number in `scenario.py` or a version in a metadata file that drifts from
+  the claim or the run turns the suite red.
 * **Real data only**: tests exercise the actual algorithms on generated,
   deterministic data — no mock framework anywhere in `tests/`.
 * **Regenerable artefacts**: figures and reports land under `output/`, which

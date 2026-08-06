@@ -106,3 +106,20 @@ def test_capture_feasibility_colours_all_three_fit_classes(tmp_path: Path) -> No
     out = plot_capture_feasibility(sizes, bay, filename="capture_feasibility_branches.png")
     assert out.is_file()
     assert out.stat().st_size > 0
+
+
+class TestFigureDeterminism:
+    """``06_reproducibility.md`` claims byte-identical figure renders.
+
+    The earlier figure gate asserted existence and non-empty size only, so a
+    matplotlib version bump, an embedded creation timestamp, or unseeded
+    jitter would pass silently while the reproducibility claim was false.
+    Rendering each figure twice must yield byte-identical PNGs.
+    """
+
+    def test_all_figures_are_byte_deterministic(self) -> None:
+        first = {name: Path(path).read_bytes() for name, path in build_all_figures().items()}
+        second = {name: Path(path).read_bytes() for name, path in build_all_figures().items()}
+        assert set(first) == set(second)
+        for name in first:
+            assert first[name] == second[name], f"{name} render is not deterministic"

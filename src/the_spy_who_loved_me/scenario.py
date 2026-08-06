@@ -29,7 +29,15 @@ from .acoustics import (
 )
 from .beamforming import array_snapshot, cramer_rao_bearing_std_deg, estimate_bearing_deg
 from .hull_forensics import ballast_volume_m3, collapse_depth_m, design_safety_factor
-from .sub_tracking import detect_contract, estimate_tma, simulate_signal, simulate_target_track
+from .sub_tracking import (
+    DetectionConfig,
+    PassiveBearingTracker,
+    detect_contract,
+    estimate_tma,
+    simulate_signal,
+    simulate_target_track,
+    tracking_rms_error,
+)
 from .tanker_capture import (
     BayConfig,
     SubmarineSpec,
@@ -53,6 +61,20 @@ SEED = 11
 _DETECTION_SNR_DB = 12.0
 _DETECTION_FS = 8000
 _DETECTION_DURATION_S = 2.0
+_DETECTION_P_FA = 1e-3
+
+# --- Extended Kalman Filter (sub_tracking) ---
+# Recursive-filter seed and process/measurement noise for the EKF that the
+# canonical scenario runs alongside batch TMA (Section 3). The initial state
+# is a coarse guess; the filter converges over the scenario window regardless.
+_EKF_INIT_X_M = 3800.0
+_EKF_INIT_Y_M = 1900.0
+_EKF_INIT_VX_M_S = 0.0
+_EKF_INIT_VY_M_S = 25.0
+_EKF_INIT_POS_COV_M2 = 1e4
+_EKF_INIT_VEL_COV_M2S2 = 1e2
+_EKF_PROCESS_NOISE = 1e-3
+_EKF_MEASUREMENT_NOISE_RAD = 5e-3
 
 # --- Bearing-only tracking (sub_tracking) ---
 _TRACK_DURATION_S = 600.0
@@ -125,6 +147,15 @@ def canonical_parameters() -> dict[str, float | int]:
         "detection_snr_db": _DETECTION_SNR_DB,
         "detection_fs": _DETECTION_FS,
         "detection_duration_s": _DETECTION_DURATION_S,
+        "detection_p_fa": _DETECTION_P_FA,
+        "ekf_init_x_m": _EKF_INIT_X_M,
+        "ekf_init_y_m": _EKF_INIT_Y_M,
+        "ekf_init_vx_m_s": _EKF_INIT_VX_M_S,
+        "ekf_init_vy_m_s": _EKF_INIT_VY_M_S,
+        "ekf_init_pos_cov_m2": _EKF_INIT_POS_COV_M2,
+        "ekf_init_vel_cov_m2s2": _EKF_INIT_VEL_COV_M2S2,
+        "ekf_process_noise": _EKF_PROCESS_NOISE,
+        "ekf_measurement_noise_rad": _EKF_MEASUREMENT_NOISE_RAD,
         "track_duration_s": _TRACK_DURATION_S,
         "track_dt_s": _TRACK_DT_S,
         "track_speed_m_s": _TRACK_SPEED_M_S,
@@ -185,7 +216,7 @@ def run_canonical() -> dict[str, Any]:
     """
     # 1. Passive acoustic detection
     signal = simulate_signal(_DETECTION_DURATION_S, _DETECTION_FS, _DETECTION_SNR_DB, SEED)
-    detection = detect_contract(signal)
+    detection = detect_contract(signal, DetectionConfig(p_fa=_DETECTION_P_FA))
 
     # 2. Bearing-only tracking (maneuvering ownship TMA)
     track = simulate_target_track(
@@ -206,6 +237,23 @@ def run_canonical() -> dict[str, Any]:
         )
     )
 
+    # 2b. Extended Kalman Filter over the same bearing sequence (recursive
+    # partner to the batch TMA; reported so the two are comparable on one run).
+    tracker = PassiveBearingTracker(
+        [_EKF_INIT_X_M, _EKF_INIT_Y_M, _EKF_INIT_VX_M_S, _EKF_INIT_VY_M_S],
+        [
+            [_EKF_INIT_POS_COV_M2, 0.0, 0.0, 0.0],
+            [0.0, _EKF_INIT_POS_COV_M2, 0.0, 0.0],
+            [0.0, 0.0, _EKF_INIT_VEL_COV_M2S2, 0.0],
+            [0.0, 0.0, 0.0, _EKF_INIT_VEL_COV_M2S2],
+        ],
+        process_noise=_EKF_PROCESS_NOISE,
+        measurement_noise_rad=_EKF_MEASUREMENT_NOISE_RAD,
+    )
+    ekf_hist = tracker.run(track)
+    ekf_warmup = track.num_measurements // 2
+    ekf_rms = tracking_rms_error(ekf_hist, track.truth, warmup=ekf_warmup)
+
     # 3. Liparus capture
     capture = simulate_capture(_SUB, _BAY)
 
@@ -225,6 +273,7 @@ def run_canonical() -> dict[str, Any]:
         SEED,
     )
     beam = estimate_bearing_deg(snapshot, _BEAM_D_OVER_LAMBDA)
+    beam_refined = estimate_bearing_deg(snapshot, _BEAM_D_OVER_LAMBDA, interpolate=True)
     crb_deg = cramer_rao_bearing_std_deg(
         _BEAM_N_ELEMENTS, _BEAM_D_OVER_LAMBDA, _BEAM_SNR_DB, math.radians(_BEAM_TRUE_BEARING_DEG)
     )
@@ -238,10 +287,12 @@ def run_canonical() -> dict[str, Any]:
         # sub_tracking
         "detected": detection.detected,
         "detection_margin_db": round(detection.margin_db, 2),
+        "detection_p_fa": detection.p_fa,
         "track_pos_err_m": round(pos_err, 1),
         "track_vel_err_m_s": round(vel_err, 1),
         "track_num_bearings": track.num_measurements,
         "track_residual_rms_rad": round(sol.residual_rms_rad, 4),
+        "track_ekf_rms_m": round(ekf_rms, 1),
         "track_duration_s": _TRACK_DURATION_S,
         "track_dt_s": _TRACK_DT_S,
         "track_speed_m_s": _TRACK_SPEED_M_S,
@@ -287,6 +338,10 @@ def run_canonical() -> dict[str, Any]:
         "beam_true_bearing_deg": _BEAM_TRUE_BEARING_DEG,
         "beam_estimate_deg": round(beam.bearing_deg, 2),
         "beam_bearing_err_deg": round(abs(beam.bearing_deg - _BEAM_TRUE_BEARING_DEG), 2),
+        "beam_bearing_err_interp_deg": round(
+            abs(beam_refined.bearing_deg - _BEAM_TRUE_BEARING_DEG), 3
+        ),
+        "beam_estimate_interp_deg": round(beam_refined.bearing_deg, 3),
         "beam_crb_deg": round(crb_deg, 3),
         "beam_snr_db": round(_BEAM_SNR_DB, 1),
         # Read back off the grid the estimator actually scanned, so the

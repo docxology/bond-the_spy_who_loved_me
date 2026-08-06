@@ -13,6 +13,7 @@ from the_spy_who_loved_me.beamforming import (
     beam_power,
     cramer_rao_bearing_std_deg,
     estimate_bearing_deg,
+    interpolate_peak_deg,
     steering_vector,
 )
 
@@ -142,3 +143,50 @@ class TestScanGridQuantisation:
         fine_grid = np.arange(-90.0, 90.0 + 0.01, 0.01)
         fine = abs(estimate_bearing_deg(snap, 0.5, fine_grid).bearing_deg - true_deg)
         assert fine < coarse
+
+
+class TestInterpolation:
+    """Opt-in parabolic interpolation refines the grid-quantised estimate.
+
+    ``estimate_bearing_deg(..., interpolate=True)`` is **additive**: the
+    default stays grid-quantised (so existing semantics and the honest
+    grid-limitation story are preserved), and interpolation is an explicit
+    precision improvement. On an off-grid bearing at high SNR the
+    interpolated error must be strictly smaller than the grid error and
+    within an order of magnitude of the Cramer-Rao floor — which is what a
+    beamformer can approach (not beat). Removing interpolation makes this
+    red.
+    """
+
+    GRID = np.arange(-90.0, 90.0 + 0.5, 0.5)
+
+    def test_default_stays_grid_quantised(self) -> None:
+        """The grid-path behaviour is unchanged: output is a grid node."""
+        snap = array_snapshot(math.radians(12.3), 0.5, 16, 1.0, 0.05, 7)
+        res = estimate_bearing_deg(snap, 0.5)
+        est = res.bearing_deg
+        assert math.isclose(est / 0.5, round(est / 0.5), abs_tol=1e-9)
+
+    def test_interp_beats_grid_on_off_grid_bearing(self) -> None:
+        true_deg = 12.3  # between nodes
+        snap = array_snapshot(math.radians(true_deg), 0.5, 16, 1.0, 0.05, 7)
+        grid_err = abs(estimate_bearing_deg(snap, 0.5).bearing_deg - true_deg)
+        interp_err = abs(estimate_bearing_deg(snap, 0.5, interpolate=True).bearing_deg - true_deg)
+        assert grid_err > 0.0  # genuinely off-grid, else the test is vacuous
+        assert interp_err < grid_err
+
+    def test_interp_reasonable_vs_cramer_rao(self) -> None:
+        true_deg = 12.3
+        snap = array_snapshot(math.radians(true_deg), 0.5, 16, 1.0, 0.02, 7)
+        crb = cramer_rao_bearing_std_deg(16, 0.5, 34.0, math.radians(true_deg))
+        interp_err = abs(estimate_bearing_deg(snap, 0.5, interpolate=True).bearing_deg - true_deg)
+        # Sanity (not a tight bound, but a real relation): a good estimate is
+        # within a few CRB sigma, not orders above.
+        assert interp_err < 10.0 * crb + 0.05
+
+    def test_interpolate_peak_deg_degenerate_returns_node(self) -> None:
+        scan = np.array([-1.0, 0.0, 1.0])
+        powers_none = np.array([1.0, 1.0, 1.0])  # flat -> no parabola
+        assert interpolate_peak_deg(scan, powers_none, 1) == 0.0
+        assert interpolate_peak_deg(scan, np.array([1.0, 2.0, 3.0]), 0) == -1.0  # corner
+        assert interpolate_peak_deg(scan, np.array([1.0, 2.0, 3.0]), 2) == 1.0  # corner

@@ -10,12 +10,13 @@ set and `run_canonical()`), `manuscript_variables.py` (`{{TOKEN}}` hydration)
 and `mission.py` (the frozen `bond_api.MissionProvider` adapter). Local-only
 tree: no remote, no DOI, never pushed.
 
-**Verified state, measured 2026-08-05 on commit `0aa55c5`:**
-`uv run pytest tests/ --cov=src --cov-fail-under=90` → **215 passed**,
-**100.00%** line *and* branch coverage on `src/` (918 statements, 186
+**Verified state, measured 2026-08-06 (Round-2 deep-improvement, commit `0aa55c5` + this round):**
+`uv run pytest tests/ --cov=src --cov-fail-under=90` → **225 passed**,
+**100.00%** line *and* branch coverage on `src/` (948 statements, 192
 branches, 0 missed). `ruff check`, `ruff format --check`, `mypy src/`,
 `scripts/mission_cli.py full` and `scripts/z_generate_manuscript_variables.py`
-all pass; working tree clean.
+all pass. See the **Round-2 (2026-08-06)** section at the bottom for the
+findings fixed and the ones deliberately left open.
 
 Everything below is open. Finished work is in git history, not here.
 
@@ -334,11 +335,12 @@ uv run python scripts/z_generate_manuscript_variables.py
 git status --short   # empty after a path-scoped commit
 ```
 
-**Expected outcomes as of 2026-08-05 / `0aa55c5`:** 215 passed, 100.00%
-coverage (floor 90, line + branch); `All checks passed!` and `33 files already
+**Expected outcomes (Round 2, 2026-08-06):** 225 passed, 100.00% coverage
+(floor 90, line + branch); `All checks passed!` and `33 files already
 formatted`; `Success: no issues found in 13 source files`; the mission CLI
 prints the five phase objects and exits 0; hydration resolves every
-`{{TOKEN}}` under strict mode and exits 0; `git status --short` empty.
+`{{TOKEN}}` under strict mode and exits 0; `git status --short` empty after a
+path-scoped commit.
 
 The documentation gates — lineage/boilerplate, layer contract, version
 cross-check, figure registries, publication identity, and `AGENTS.md`'s
@@ -351,3 +353,86 @@ aimed at.
 If `uv` reports `Failed to initialize cache` or `Operation not permitted`,
 that is a sandbox restriction on the `uv` cache directory, not a package
 failure — re-run with the sandbox disabled.
+
+---
+
+## Round-2 (2026-08-06)
+
+Deep-improvement pass on top of the `0aa55c5` baseline. **All five gates green:
+225 passed, 100.00% line+branch coverage on `src/` (floor 90), `ruff check`
+clean, `ruff format --check` (33 files), `mypy` clean (13 files), mission CLI
+`full` exits 0, manuscript hydration resolves every `{{TOKEN}}` strictly.**
+
+### Fixes in this round (each with a regression test)
+
+* **C1 — parabolic refinement of the bearing estimate.** `beamforming.py`
+  gains `interpolate_peak_deg` and an opt-in `interpolate=True` keyword on
+  `estimate_bearing_deg` (default stays grid-quantised, so existing callers
+  and the honest grid story are unchanged). `run_canonical` now also reports
+  `beam_estimate_interp_deg` / `beam_bearing_err_interp_deg`. Evidence:
+  `tests/test_beamforming.py::TestInterpolation` asserts the refined error is
+  strictly smaller than the grid error on an off-grid bearing and within a
+  sensible factor of the CRB; `tests/test_scenario.py` pins the metric is
+  finite and bounded. On the canonical (grid-aligned) case the refined error
+  is `BEAM_BEARING_ERR_INTERP_DEG` (a sub-cell snapshot-noise residual, 0.11°,
+  vs the grid's alignment-artefact 0.00° and a 0.33° CRB floor). **Left open:**
+  the default grid behaviour is preserved by design.
+* **E1 — the EKF now reaches the manuscript.** `run_canonical` runs the
+  recursive filter on the same bearing sequence and reports steady-state RMS
+  (`track_ekf_rms_m`, 804 m ≈ 8% of the ~10 km mean range) alongside the batch
+  TMA. `tests/test_scenario.py::test_ekf_metric_is_finite_and_reportable`
+  bounds it relative to the geometry and `test_canonical_ekf_constants_reach_*`
+  pins every EKF seed as a scenario input (no hidden literals). Section
+  @sec:results compares batch vs recursive accuracy from tokens.
+* **D1 — detection is now reported.** `run_canonical` reports `detection_p_fa`
+  (the detector is run at an explicit `DetectionConfig(p_fa=...)`), and
+  `manuscript_variables` emits `DETECTED`, `DETECTION_MARGIN_DB`,
+  `DETECTION_P_FA`. Section @sec:results gains a Detection subsection.
+* **C4 — persisted mission outcome keeps its provenance.** `mission_cli.py`
+  `execute` now writes `{"provenance": {...}, "results": {...}}` to
+  `output/data/mission_outcome.json`; it used to write only `results`, so the
+  input hash a reader would audit against was printed and discarded.
+  `tests/test_scripts_smoke.py::test_mission_cli_execute_persists_provenance`
+  asserts the file parses and its `input_hash == scenario.canonical_input_hash()`.
+* **V2 — claim-ledger values are bound to the run.** New
+  `TestDocsAgreeWithTheRun::test_claim_ledger_values_match_the_run` resolves
+  every numeric ledger `value` against the live `run_canonical` metric (or the
+  declared `_PHASE_DURATIONS` schedule) and fails on drift, so e.g. a
+  `clearance_m` edit that leaves the ledger saying 1.5 now turns the suite red.
+* **V3 — the version cross-check now covers all declaration sites.** The gate
+  adds `manuscript/config.yaml.example`, `manuscript/AGENTS.md` and the agent
+  `SKILL.md` frontmatter alongside the seven already checked (now 10 sites).
+* **V4 — figures are asserted byte-deterministic.** New
+  `test_figures.py::TestFigureDeterminism` renders `build_all_figures()` twice
+  and compares PNG bytes, so a matplotlib bump or embedded timestamp fails the
+  determinism claim instead of passing under an existence+size check.
+* **D2 / D3 — docs hygiene.** `docs/README.md`'s lint command now includes
+  `tests/` (matching README/AGENTS), and the `.agents/` scaffolding prose no
+  longer describes the film package as a template "exemplar" to fork.
+
+### Manuscript improvements
+
+Added enough tokenised coverage for the compendium: an abstract that now
+carries the detection margin/`P_FA`, both tracker results and the refined
+bearing; a Detection subsection and an EKF-vs-batch paragraph in
+@sec:results; a recursive-filter bullet and detection `P_FA` in @sec:setup;
+reproducibility notes for the new figure-determinism, persisted-provenance and
+ledger/version gates in @sec:reproducibility; and detection / EKF /
+interpolation caveats in @sec:scope. Every number in the new prose is a
+`{{TOKEN}}` resolved by `scripts/z_generate_manuscript_variables.py` — none is
+hand-typed.
+
+### What remains (unchanged and still open from the list above)
+
+* **C2 / C3 — the capture timeline is still a declared schedule.** `_PHASE_DURATIONS`
+  remains four uncited constants and the hatch-seal / approach phases still
+  carry no discriminating predicate. This is labelled everywhere it appears and
+  pinned as a schedule by `TestReportedTimeIsASchedule`; it would need a real
+  (cited) timing model or a two-phase collapse to close — deliberately left for
+  a future round rather than fabricated.
+* **V1 — the EKF accuracy bound is still empirical.** The new canonical EKF
+  metric is bounded relative to the geometry, but a true normalised-estimation-error
+  (NEES) consistency check against the filter's own covariance `P` remains open.
+* **E2 — the fleet provenance helper is still not wired.** `record_provenance_outcome`
+  from `bond-utilities` is not yet called (C4 fixed the local JSON path; wiring
+  the fleet helper is still pending the stable helper).

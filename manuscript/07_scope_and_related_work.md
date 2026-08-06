@@ -15,10 +15,21 @@ because they are where the results stop being trustworthy:
   a field prediction.
 * **Tracking** assumes an ideal constant-velocity target and a precisely
   known ownship path. Neither manoeuvring targets nor navigation error are
-  modelled.
+  modelled. The recursive EKF shares both assumptions and adds its own: a fixed
+  (white) process noise and a fixed bearing-noise variance, so its steady-state
+  error is a statement about that ideal filter on that ideal trajectory, not
+  about a real receiver.
+* **Detection** is a fixed-threshold Neyman-Pearson energy detector over
+  zero-mean Gaussian noise: no fluctuating target, no multipath fading, no
+  signal-correlated noise, no non-stationary ambient levels. The reported
+  `P_FA` and margin are therefore a *controlled but idealised* operating
+  point, not a detection probability in a real noise field.
 * **Beamforming** is conventional delay-and-sum on a single snapshot: no
   adaptive (MVDR/MUSIC) processing, no multipath, no coherent multi-snapshot
-  averaging, and a bearing estimate quantised to the scan grid.
+  averaging. The grid bearing is quantised to the scan step; the parabolic
+  refinement is a local quadratic fit that *approaches* the Cramer-Rao bound
+  but cannot reach the true CRB performance of an optimal estimator on finite
+  data, and the two are reported separately for exactly that reason.
 * **Hull analysis** treats an unstiffened long cylinder under uniform
   external pressure. Ring stiffening, end-cap effects, out-of-roundness and
   weld/fatigue defects — the things that actually govern a real submersible

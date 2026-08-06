@@ -2,8 +2,8 @@
 
 Thin orchestrator. Delegates each phase to the mission provider's
 corresponding method and renders the resulting protocol object to stdout as
-JSON via :mod:`bond_api.serialization`. ``execute`` also writes the raw
-outcome results to ``output/data/mission_outcome.json`` for provenance.
+JSON via :mod:`bond_api.serialization`. ``execute`` also writes the outcome results **with their provenance block**
+(package version, seed, input hash) to ``output/data/mission_outcome.json``.
 """
 
 from __future__ import annotations
@@ -51,7 +51,20 @@ def main(argv: list[str] | None = None) -> int:
         _print_json(outcome)
         out_path = Path(args.out)
         out_path.parent.mkdir(parents=True, exist_ok=True)
-        out_path.write_text(json.dumps(outcome.results, indent=2, sort_keys=True), encoding="utf-8")
+        # Persist the provenance block *alongside* the results. The file used
+        # to carry only ``results``, so the input hash the manuscript points
+        # at for auditability ("what lets an outcome be audited without
+        # re-execution") was printed to stdout and then discarded.
+        payload = {
+            "provenance": {
+                "package_version": outcome.provenance.package_version,
+                "seed": outcome.provenance.seed,
+                "input_hash": outcome.provenance.input_hash,
+                "wall_time_s": outcome.provenance.wall_time_s,
+            },
+            "results": outcome.results,
+        }
+        out_path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
     elif args.phase == "debrief":
         from bond_api.protocol import run_mission
 

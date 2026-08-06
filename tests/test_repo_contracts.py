@@ -36,6 +36,7 @@ import yaml
 from the_spy_who_loved_me.figures import build_all_figures
 from the_spy_who_loved_me.mission import PACKAGE_VERSION
 from the_spy_who_loved_me.scenario import run_canonical
+from the_spy_who_loved_me.tanker_capture import _PHASE_DURATIONS
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 
@@ -131,6 +132,23 @@ class TestVersionIsDeclaredOnce:
         codemeta = json.loads((PACKAGE_ROOT / "codemeta.json").read_text())
         zenodo = json.loads((PACKAGE_ROOT / ".zenodo.json").read_text())
         citation = yaml.safe_load((PACKAGE_ROOT / "CITATION.cff").read_text())
+        example = yaml.safe_load((PACKAGE_ROOT / "manuscript" / "config.yaml.example").read_text())
+        skill = (PACKAGE_ROOT / ".agents/skills/the-spy-who-loved-me/SKILL.md").read_text()
+        m_agents = (PACKAGE_ROOT / "manuscript" / "AGENTS.md").read_text()
+
+        def _frontmatter_version(text: str) -> str:
+            # A frontmatter ``version`` line, quoted or bare. Split on the
+            # first colon and strip whitespace, quotes and commas rather than
+            # regex-quoting a quote character.
+            for line in text.splitlines():
+                line = line.strip()
+                if not line.startswith("version:"):
+                    continue
+                value = line.split(":", 1)[1].strip().strip("\"' ,")
+                parts = value.split(".")
+                if len(parts) == 3 and all(p.isdigit() for p in parts):
+                    return value
+            raise AssertionError("no frontmatter version found")
 
         declared = {
             "pyproject.toml [project] version": expected,
@@ -142,8 +160,11 @@ class TestVersionIsDeclaredOnce:
             "codemeta.json version": str(codemeta["version"]),
             ".zenodo.json version": str(zenodo["version"]),
             "CITATION.cff version": str(citation["version"]),
+            "manuscript/config.yaml.example paper.version": str(example["paper"]["version"]),
+            ".agents/.../SKILL.md version": _frontmatter_version(skill),
+            "manuscript/AGENTS.md version": _frontmatter_version(m_agents),
         }
-        assert len(declared) >= 6
+        assert len(declared) >= 9
         disagreeing = {k: v for k, v in declared.items() if v != expected}
         assert not disagreeing, f"version drift against {expected}: {disagreeing}"
 
@@ -372,3 +393,37 @@ class TestDocsAgreeWithTheRun:
                 if token.isidentifier() and token not in text:
                     missing.append(f"{claim['claim_id']} -> {symbol}")
         assert not missing, f"claim ledger names absent symbols: {missing}"
+
+    #: claim_id -> a callable resolving the ledger's reported ``value``
+    #: against the live canonical run (or the declared schedule).
+    #:
+    #: This implements V2: the ledger's numbers were never checked against the
+    #: code, so ``scenario.py`` could change ``clearance_m`` from 1.5 and the
+    #: ledger would still say 1.5 with the whole suite green.
+    _LEDGER_VALUE_RESOLVERS = {
+        "pfa-controlled": lambda c: c["detection_p_fa"],
+        "capture-clearance": lambda c: c["tanker_clearance_m"],
+        "liparus-hold-length": lambda c: c["tanker_hold_length_m"],
+        # declared_constant: the sum of the per-phase schedule, not a metric.
+        "capture-elapsed-time": lambda c: sum(_PHASE_DURATIONS.values()),
+    }
+
+    def test_claim_ledger_values_match_the_run(self) -> None:
+        """Every numeric ledger ``value`` must equal the live metric or source."""
+        import math
+
+        ledger = yaml.safe_load((PACKAGE_ROOT / "data" / "claim_ledger.yaml").read_text())
+        metrics = run_canonical()
+        disagreements = []
+        for claim in ledger["claims"]:
+            claim_id, value = claim["claim_id"], claim.get("value")
+            if value in ("generated", None):  # not a static claim; skip
+                continue
+            resolver = self._LEDGER_VALUE_RESOLVERS.get(claim_id)
+            assert resolver is not None, (
+                f"no resolver for ledger claim {claim_id} — extend _LEDGER_VALUE_RESOLVERS"
+            )
+            live = resolver(metrics)
+            if not math.isclose(float(value), float(live), abs_tol=1e-6):
+                disagreements.append(f"{claim_id}: ledger {value} vs live {live}")
+        assert not disagreements, f"claim ledger values drifted from the run: {disagreements}"

@@ -25,12 +25,32 @@ def test_mission_cli_brief() -> None:
     assert '"MissionBrief"' in result.stdout
 
 
-def test_mission_cli_execute_writes_outcome(tmp_path: Path) -> None:
+def test_mission_cli_execute_persists_provenance(tmp_path: Path) -> None:
+    """The persisted outcome must keep its provenance block (C4).
+
+    ``mission_outcome.json`` used to carry only the results map, so the input
+    hash the manuscript points at for audit ("what lets an outcome be audited
+    without re-execution") was printed to stdout and then discarded. The file
+    now carries provenance (version, seed, input hash) alongside results, and
+    this pins it: a future regression that drops the block turns this red.
+    """
+    import json
+
+    from the_spy_who_loved_me.scenario import canonical_input_hash
+
     out = tmp_path / "data" / "mission_outcome.json"
     result = _run("mission_cli.py", "execute", "--out", str(out))
     assert result.returncode == 0
     assert out.is_file()
-    assert '"detected"' in out.read_text(encoding="utf-8")
+    payload = json.loads(out.read_text(encoding="utf-8"))
+    assert "provenance" in payload
+    prov = payload["provenance"]
+    assert prov["input_hash"] == canonical_input_hash()
+    assert prov["package_version"] and prov["input_hash"].__len__() == 64
+    assert "results" in payload and payload["results"]["detected"] is True
+    # The provenance block is no longer discarded into the blob: results only
+    # would trip the older (buggy) shape.
+    assert "results" not in prov
 
 
 def test_mission_cli_unknown_phase_exits_2() -> None:

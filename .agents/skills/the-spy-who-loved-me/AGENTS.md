@@ -1,6 +1,6 @@
 # the-spy-who-loved-me skill — AGENTS.md
 
-Project-scoped skill bundle for the `the_spy_who_loved_me` exemplar.
+Project-scoped skill bundle for the `the_spy_who_loved_me` film package.
 
 | File | Purpose |
 | --- | --- |
@@ -12,8 +12,8 @@ Project-scoped skill bundle for the `the_spy_who_loved_me` exemplar.
 
 Agents that need to:
 
-- Drive the in-repo exemplar end-to-end.
-- Fork this exemplar as a starting scaffold.
+- Drive the in-repo film package end-to-end.
+- Verify the package's contracts (layer boundaries, determinism, tokens).
 - Verify layer boundaries and thin-orchestrator contracts.
 
 ## Cross-refs

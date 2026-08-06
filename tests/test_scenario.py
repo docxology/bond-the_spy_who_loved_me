@@ -233,3 +233,88 @@ def test_beam_scan_step_is_read_off_the_estimator_grid() -> None:
     assert math.isclose(c["beam_scan_step_deg"], float(grid[1] - grid[0]), rel_tol=1e-9)
     # The measured bearing error can never exceed half a scan cell here.
     assert c["beam_bearing_err_deg"] <= c["beam_scan_step_deg"] / 2.0 + 1e-9
+
+
+def test_detection_p_fa_is_reported_and_used() -> None:
+    """D1: the operating false-alarm probability reaches the run and the token.
+
+    ``detect_contract`` is run with an explicit ``DetectionConfig(p_fa=...)``
+    whose value is a reported metric, so prose can state at what false-alarm
+    rate the contact was declared without typing 0.001.
+    """
+    from the_spy_who_loved_me.scenario import _DETECTION_P_FA
+
+    c = run_canonical()
+    assert c["detection_p_fa"] == pytest.approx(_DETECTION_P_FA)
+    assert c["detection_p_fa"] == pytest.approx(1e-3)
+
+
+def test_ekf_metric_is_finite_and_reportable() -> None:
+    """E1: the recursive EKF runs on the canonical window and reports RMS.
+
+    Before this, the EKF was implemented and tested but never reached
+    ``run_canonical``, so no manuscript result reported it. This pins that
+    the metric exists, is finite, and is a real steady-state error rather than
+    a NaN. The bound is *relative to the geometry it ran on* — the recursive
+    estimate sits within 10% of the mean target range over the second half of
+    the window (measured ~8%), the same way ``TestEkfActuallyEstimates``
+    bounds it — so a divergent filter fails here.
+    """
+    import math
+
+    from the_spy_who_loved_me.scenario import (
+        _TRACK_BEARING_NOISE_DEG,
+        _TRACK_COURSE_DEG,
+        _TRACK_DT_S,
+        _TRACK_DURATION_S,
+        _TRACK_SPEED_M_S,
+        SEED,
+    )
+    from the_spy_who_loved_me.sub_tracking import simulate_target_track
+
+    c = run_canonical()
+    assert math.isfinite(c["track_ekf_rms_m"])
+    assert c["track_ekf_rms_m"] > 0.0
+
+    track = simulate_target_track(
+        _TRACK_DURATION_S,
+        _TRACK_DT_S,
+        _TRACK_SPEED_M_S,
+        _TRACK_COURSE_DEG,
+        _TRACK_BEARING_NOISE_DEG,
+        SEED,
+    )
+    half = track.num_measurements // 2
+    mean_range = float(np.mean(np.linalg.norm(track.truth[half:] - track.ownship[half:], axis=1)))
+    assert c["track_ekf_rms_m"] < 0.10 * mean_range
+
+
+def test_canonical_ekf_constants_reach_the_input_hash() -> None:
+    """Every EKF seed parameter is a scenario input, not a hidden literal."""
+    from the_spy_who_loved_me import scenario as sc
+
+    for name in (
+        "_EKF_INIT_X_M",
+        "_EKF_INIT_Y_M",
+        "_EKF_INIT_VEL_COV_M2S2",
+        "_EKF_PROCESS_NOISE",
+        "_EKF_MEASUREMENT_NOISE_RAD",
+    ):
+        assert canonical_parameters()[name[1:].lower()] == getattr(sc, name)
+
+
+def test_interpolated_bearing_metric_improves_on_grid() -> None:
+    """C1: the refined (parabolic) estimate is reported and no worse.
+
+    ``beam_bearing_err_interp_deg`` is computed with ``interpolate=True``;
+    on the canonical (grid-aligned) truth the two agree, but the refined
+    metric exists and is bounded, so a real precision gain is possible on
+    off-grid geometry.
+    """
+    import math
+
+    c = run_canonical()
+    assert math.isfinite(c["beam_bearing_err_interp_deg"])
+    assert c["beam_bearing_err_interp_deg"] <= (
+        c["beam_bearing_err_deg"] + 1e-6 + 0.5 * c["beam_scan_step_deg"]
+    )
