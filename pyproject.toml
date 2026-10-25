@@ -1,5 +1,5 @@
 # The Spy Who Loved Me (1977) — LIPARUS — Special-Agent Mission Software
-# PROJECT BOND film package (local-only working tree, never push).
+# PROJECT BOND film package (standalone handoff tree; not published).
 # Dep surface: stdlib + numpy + matplotlib + pyyaml + bond-api (frozen protocol).
 
 [build-system]
@@ -55,8 +55,8 @@ omit = [
 ]
 
 [tool.coverage.report]
-# ≥90% on src/ is the enforced gate; live coverage % is tracked in
-# docs/_generated/COUNTS.md (do not hardcode it here — it drifts).
+# ≥90% on src/ is the enforced gate; the live coverage % is a measurement, not
+# a declaration — the manuscript reads the floor from here (do not restate it).
 fail_under = 90
 show_missing = true
 precision = 2

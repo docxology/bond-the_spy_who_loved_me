@@ -46,5 +46,5 @@ numbered sections exists in `generate_variables()`.
 ## Config
 
 `config.yaml` holds the LIPARUS identity (title, version, codename, seed)
-consumed by the variable hydration and publication metadata. The tree is
-local-only, so no DOI fields are present.
+consumed by the variable hydration and publication metadata. The tree carries
+no DOI, so no DOI fields are present.

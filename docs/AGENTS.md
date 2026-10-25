@@ -8,8 +8,9 @@ command-level companion.
 ## Scope
 
 Your scope is exactly this directory. Do not touch a sibling BOND package,
-the bond root files, or the template repository. This is a **local-only**
-tree with **no git remote** — commit here, never push.
+the bond root files, or the template repository. Nothing here is published —
+no DOI, no release tag — and the only git remote is a private handoff mirror;
+commit path-scoped and never push to a public host.
 
 ## The five invariants
 
@@ -159,7 +160,7 @@ input down as a test.
 
 ```bash
 uv run pytest tests/ --cov=src --cov-fail-under=90
-uv run ruff check src/ scripts/ && uv run ruff format --check src/ scripts/
+uv run ruff check src/ scripts/ tests/ && uv run ruff format --check src/ scripts/ tests/
 uv run mypy src/
 uv run python scripts/mission_cli.py full                  # protocol still drivable
 uv run python scripts/z_generate_manuscript_variables.py   # tokens still resolve

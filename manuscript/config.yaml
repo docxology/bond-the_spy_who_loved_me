@@ -1,5 +1,5 @@
 # The Spy Who Loved Me (1977) — LIPARUS — Special-Agent Mission Software
-# PROJECT BOND film package (local-only working tree, never push).
+# PROJECT BOND film package (standalone handoff tree; not published).
 # This meta-artifact links the manuscript prose to the deterministic domain
 # core. It is loaded by yaml.safe_load inside manuscript_variables.py
 # (paper section) and consumed by the publishing metadata beneath.

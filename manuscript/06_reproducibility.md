@@ -53,5 +53,5 @@ LIPARUS is reproducible by construction.
   is git-ignored; `scripts/generate_figures.py` and
   `scripts/z_generate_manuscript_variables.py` rebuild them deterministically.
 * **Verification**: `uv run pytest tests/ --cov=src --cov-fail-under=90`,
-  `ruff check`/`format`, `mypy`, and the lineage scan are the acceptance
-  gate before any commit.
+  `ruff check`/`format`, `mypy`, and the documentation gates in
+  `tests/test_repo_contracts.py` are the acceptance gate before any commit.

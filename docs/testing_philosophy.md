@@ -111,7 +111,7 @@ and watch it go red.
 | `test_manuscript_variables.py` | Config loading and its two rejection paths; the live token cross-reference over `manuscript/[0-9]*.md`; strict and non-strict tree resolution; the coverage floor matching `pyproject.toml`; each strict output guard firing, via a pure predicate rather than a substituted dependency; **the persisted variable map being identical across regenerations, and carrying no wall-clock value under any name** |
 | `test_figures.py` | All five figures rendering to non-empty files; the capture-feasibility colour branches for all three fit classes |
 | `test_scripts_smoke.py` | The thin CLIs run as subprocesses with `sys.executable`, exit zero, and write the artefacts they claim to |
-| `test_repo_contracts.py` | **The documentation against the package**: one version across seven declaration sites; the layer contract in `manuscript/layer_contract.yaml` actually enforced; the figure registries equal to `build_all_figures()`; no fabricated publication identity in any document; no exemplar boilerplate; `AGENTS.md`'s hardcoded scenario numbers equal to the canonical run; the claim ledger pointing at files and symbols that exist |
+| `test_repo_contracts.py` | **The documentation against the package**: one version across ten declaration sites; the layer contract in `manuscript/layer_contract.yaml` actually enforced; the figure registries equal to `build_all_figures()`; no fabricated publication identity in any document; no exemplar boilerplate; `AGENTS.md`'s hardcoded scenario numbers equal to the canonical run; the claim ledger pointing at files and symbols that exist |
 
 ## The live cross-reference
 

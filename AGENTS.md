@@ -2,7 +2,8 @@
 
 **PROJECT BOND film package** — special-agent mission software exposing six
 deterministic domain concepts to the BOND fleet through the frozen `bond_api`
-mission protocol. Local-only working tree (no remote, never push).
+mission protocol. Not published: no DOI, no release tag, no package registry;
+the only git remote is a private handoff mirror.
 
 ## Package identity
 
@@ -154,7 +155,7 @@ package failure — re-run with the sandbox disabled.
 
 ## See also
 
-- `../bond-api` — the frozen `MissionProvider` protocol (son package in the
+- `../bond-api` — the frozen `MissionProvider` protocol (sibling package in the
   BOND suite; path dependency).
 - [`docs/agent_instructions.md`](docs/agent_instructions.md) — operational
   rules for agents working here.

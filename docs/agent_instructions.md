@@ -9,8 +9,9 @@ file.
 - This is a **PROJECT BOND film package** (codename **LIPARUS**) for *The Spy
   Who Loved Me (1977)*. Work only inside this directory; never touch sibling
   packages, bond root files, or the template repo.
-- **Local-only tree**: no remote, never push. Commit path-scoped within this
-  package's own git repo.
+- **Not published**: no DOI, no release tag, no package registry. The only git
+  remote is a private handoff mirror; commit path-scoped within this package's
+  own git repo and never push to a public host.
 
 ## The 8 hard rules
 

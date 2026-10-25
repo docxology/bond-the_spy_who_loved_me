@@ -112,7 +112,7 @@ class TestDocumentationScanSetIsReal:
 
 
 class TestVersionIsDeclaredOnce:
-    """One version, six declaration sites, now cross-checked.
+    """One version, ten declaration sites, now cross-checked.
 
     ``pyproject.toml`` is the authority. Everything else mirrors it, and
     ``manuscript/06_reproducibility.md`` presents ``mission.PACKAGE_VERSION``
@@ -286,8 +286,8 @@ class TestNoFabricatedPublicationIdentity:
     ``github.com/docxology/the_spy_who_loved_me`` (404), Zenodo concept DOI
     ``10.5281/zenodo.20417136``, version DOI ``10.5281/zenodo.20931934``,
     Test PyPI ``the-spy-who-loved-me 2.5.2``, plus HuggingFace, IPFS, OSF,
-    Netlify and Software Heritage locations. The tree is local-only with no
-    remote and no DOI, so every one of them was fabricated.
+    Netlify and Software Heritage locations. The tree has no DOI and no
+    registry or archive identity, so every one of them was fabricated.
 
     The patterns below are identifiers and URLs, not the plain words — prose
     that *denies* a DOI ("no DOI, reserved or deposited") must stay legal.

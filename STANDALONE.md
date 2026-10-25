@@ -6,7 +6,8 @@ Running `the_spy_who_loved_me` (LIPARUS) outside the PROJECT BOND suite.
 
 This package is **not published anywhere**. It has:
 
-- no remote — the working tree is local-only and is never pushed;
+- no public remote — the only git remote is a private handoff mirror, and
+  nothing here is released or pushed to a public host;
 - no DOI, reserved or deposited;
 - no PyPI, Zenodo, HuggingFace, OSF, IPFS, Software Heritage, GitHub Pages
   or Netlify presence;
