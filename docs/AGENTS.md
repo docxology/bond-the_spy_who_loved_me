@@ -8,9 +8,10 @@ command-level companion.
 ## Scope
 
 Your scope is exactly this directory. Do not touch a sibling BOND package,
-the bond root files, or the template repository. Nothing here is published —
-no DOI, no release tag — and the only git remote is a private handoff mirror;
-commit path-scoped and never push to a public host.
+the bond root files, or the template repository. There is no DOI and no release
+tag, and the only git remote is this package's own repository
+(`github.com/docxology/bond-the_spy_who_loved_me`); commit path-scoped and
+never force-push.
 
 ## The five invariants
 

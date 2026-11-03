@@ -2,8 +2,9 @@
 
 **PROJECT BOND film package** — special-agent mission software exposing six
 deterministic domain concepts to the BOND fleet through the frozen `bond_api`
-mission protocol. Not published: no DOI, no release tag, no package registry;
-the only git remote is a private handoff mirror.
+mission protocol. No DOI, no release tag, no package registry; the only git
+remote is this package's own repository
+(`github.com/docxology/bond-the_spy_who_loved_me`, default branch `main`).
 
 ## Package identity
 

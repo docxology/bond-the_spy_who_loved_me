@@ -1,5 +1,5 @@
 # The Spy Who Loved Me (1977) — LIPARUS — Special-Agent Mission Software
-# PROJECT BOND film package (standalone handoff tree; not published).
+# PROJECT BOND film package (standalone handoff tree; repository github.com/docxology/bond-the_spy_who_loved_me).
 # Dep surface: stdlib + numpy + matplotlib + pyyaml + bond-api (frozen protocol).
 
 [build-system]
