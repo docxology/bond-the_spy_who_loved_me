@@ -2,12 +2,12 @@
 
 Running `the_spy_who_loved_me` (LIPARUS) outside the PROJECT BOND suite.
 
-## Publication identity: there is none
+## Publication identity
 
-This package is **not published anywhere**. It has:
+This package **has no release and no deposit**. It has:
 
-- no public remote — the only git remote is a private handoff mirror, and
-  nothing here is released or pushed to a public host;
+- one git remote, this package's own repository
+  (`github.com/docxology/bond-the_spy_who_loved_me`, default branch `main`);
 - no DOI, reserved or deposited;
 - no PyPI, Zenodo, HuggingFace, OSF, IPFS, Software Heritage, GitHub Pages
   or Netlify presence;

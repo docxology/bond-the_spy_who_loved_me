@@ -283,14 +283,18 @@ class TestNoFabricatedPublicationIdentity:
     """No document may assert a publication location this package lacks.
 
     ``STANDALONE.md`` carried a generated index claiming
-    ``github.com/docxology/the_spy_who_loved_me`` (404), Zenodo concept DOI
+    ``github.com/docxology/the_spy_who_loved_me`` (404; this package's own
+    repository, ``github.com/docxology/bond-the_spy_who_loved_me``, does exist
+    and naming it is legal), Zenodo concept DOI
     ``10.5281/zenodo.20417136``, version DOI ``10.5281/zenodo.20931934``,
     Test PyPI ``the-spy-who-loved-me 2.5.2``, plus HuggingFace, IPFS, OSF,
     Netlify and Software Heritage locations. The tree has no DOI and no
     registry or archive identity, so every one of them was fabricated.
 
     The patterns below are identifiers and URLs, not the plain words — prose
-    that *denies* a DOI ("no DOI, reserved or deposited") must stay legal.
+    that *denies* a DOI ("no DOI, reserved or deposited") must stay legal. The
+    package's own repository URL is the one location it does have, so
+    ``github_repo`` excludes it and still catches every other location.
     """
 
     FABRICATED = {
@@ -303,13 +307,18 @@ class TestNoFabricatedPublicationIdentity:
         "netlify": r"\.netlify\.app",
         "software_heritage": r"archive\.softwareheritage\.org",
         "github_pages": r"docxology\.github\.io",
-        "github_repo": r"github\.com/docxology/",
+        "github_repo": r"github\.com/docxology/(?!bond-the_spy_who_loved_me(?:\.git)?(?:[^\w.-]|$))",
         "publication_index_block": r"BEGIN:PUBLICATION_INDEX",
     }
 
     def test_no_document_claims_a_publication_location(self) -> None:
         hits = _grep(self.FABRICATED)
         assert not hits, f"fabricated publication identity: {hits}"
+
+    def test_the_package_names_its_own_repository(self) -> None:
+        """The documents name the one location this package really has."""
+        hits = _grep({"own_repo": r"github\.com/docxology/bond-the_spy_who_loved_me"})
+        assert hits, "no document names the package's own repository"
 
     def test_config_still_records_the_honest_position(self) -> None:
         config = (PACKAGE_ROOT / "manuscript" / "config.yaml").read_text(encoding="utf-8")

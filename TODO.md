@@ -7,8 +7,8 @@ sonar equation, ULA beamforming, Liparus-class tanker capture geometry,
 submersible conversion forensics, and pressure-hull collapse/ballast — and
 three support modules compose them: `scenario.py` (the canonical parameter
 set and `run_canonical()`), `manuscript_variables.py` (`{{TOKEN}}` hydration)
-and `mission.py` (the frozen `bond_api.MissionProvider` adapter). Not
-published: no DOI, no release tag, no public remote.
+and `mission.py` (the frozen `bond_api.MissionProvider` adapter). No DOI, no
+release tag, and no remote other than `github.com/docxology/bond-the_spy_who_loved_me`.
 
 **Verified state, measured 2026-08-06 (Round-2 deep-improvement, commit `0aa55c5` + this round):**
 `uv run pytest tests/ --cov=src --cov-fail-under=90` → **225 passed**,
