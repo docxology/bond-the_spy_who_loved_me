@@ -19,7 +19,9 @@ authors:
     corresponding: true
 
 publication:
-  # Local-only tree: no remote, no DOI. Metadata is kept minimal and honest.
+  # The only git remote is this package's own repository (`origin`, branch `main`).
+  # No DOI has been minted and no deposit exists, so none is declared. Metadata
+  # is kept minimal and honest.
   journal: "Active Inference Institute — PROJECT BOND LIPARUS"
   year: "2026"
 
