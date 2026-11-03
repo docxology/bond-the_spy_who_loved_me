@@ -17,8 +17,9 @@ The only identity it carries is the version in `pyproject.toml`, mirrored in
 `manuscript/config.yaml`, `CITATION.cff`, `codemeta.json`, `.zenodo.json` and
 `mission.PACKAGE_VERSION` — and cross-checked across all six by
 `tests/test_repo_contracts.py::TestVersionIsDeclaredOnce`.
-`manuscript/config.yaml` records the same thing in prose: *"Local-only tree:
-no remote, no DOI. Metadata is kept minimal and honest."*
+`manuscript/config.yaml` records the same thing in prose: *"The only git remote
+is this package's own repository; no DOI has been minted and no deposit exists.
+Metadata is kept minimal and honest."*
 
 `CITATION.cff`, `codemeta.json` and `.zenodo.json` exist as *prepared*
 metadata for a deposit that has not happened. They are not evidence that one

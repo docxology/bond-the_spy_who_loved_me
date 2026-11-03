@@ -313,7 +313,8 @@ class TestNoFabricatedPublicationIdentity:
 
     def test_config_still_records_the_honest_position(self) -> None:
         config = (PACKAGE_ROOT / "manuscript" / "config.yaml").read_text(encoding="utf-8")
-        assert "no remote, no DOI" in config
+        assert "only git remote is this package's own repository" in config
+        assert "No DOI has been minted" in config
 
 
 class TestNoExemplarBoilerplate:
