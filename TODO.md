@@ -280,3 +280,7 @@ hand-typed.
 * **E2 — the fleet provenance helper is still not wired.** `record_provenance_outcome`
   from `bond-utilities` is not yet called (C4 fixed the local JSON path; wiring
   the fleet helper is still pending the stable helper).
+
+## Workflowz review — 2026-11-10
+
+Coverage note (no new actionable findings): this bounded, read-only review inspected the root guidance and package overview, the existing open-work and known-limitations sections of `TODO.md`, the Python/tooling declarations in `.python-version` and `pyproject.toml`, package exports, and the supplied excerpts of the acoustics, hull-forensics, and mission-adapter implementations. The visible code contains no silent mock/fallback/fake/stub substitute; the declared capture schedule, inert capture phases, empirical EKF bound, and pending fleet provenance integration are already tracked as C2, C3, V1, and E2 and are not duplicated here. The interpreter file currently declares `3.15`, while `requires-python` is `>=3.11`, mypy checks as `3.12`, and Ruff targets `py310`; the packet supplies no resolved interpreter/lock evidence or demonstrated compatibility failure that would justify a version-change task. No concrete, independently closable improvement beyond the existing TODO survived the exact-evidence and observable-probe gates. Re-review when one of those existing items is changed, a runtime/test failure provides a reproducible contract violation, or a dependency/deployment constraint supplies a verified runtime-pin conflict.
