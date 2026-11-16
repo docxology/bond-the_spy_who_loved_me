@@ -18,11 +18,11 @@ from __future__ import annotations
 
 import platform
 import re
+import tomllib
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-import tomllib
 import yaml
 
 from .scenario import run_canonical
