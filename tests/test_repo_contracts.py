@@ -27,10 +27,10 @@ from __future__ import annotations
 
 import json
 import re
+import tomllib
 from pathlib import Path
 
 import pytest
-import tomllib
 import yaml
 
 from the_spy_who_loved_me.figures import build_all_figures

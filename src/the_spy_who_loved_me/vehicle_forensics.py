@@ -50,7 +50,7 @@ WATER_DENSITY_KG_M3 = SEAWATER_DENSITY_KG_M3
 G_MPS2 = 9.81
 
 
-class ConversionClass(str, enum.Enum):
+class ConversionClass(enum.StrEnum):
     """Readiness class of a vehicle's submersible conversion."""
 
     ROAD_ONLY = "road-only"
@@ -58,7 +58,7 @@ class ConversionClass(str, enum.Enum):
     SUBMERSIBLE = "submersible"
 
 
-class BuoyancyClass(str, enum.Enum):
+class BuoyancyClass(enum.StrEnum):
     """Archimedean state of the as-spec vehicle."""
 
     FLOATS = "floats"

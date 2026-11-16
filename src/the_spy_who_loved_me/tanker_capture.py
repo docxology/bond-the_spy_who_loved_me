@@ -52,7 +52,7 @@ __all__ = [
 ]
 
 
-class CapturePhase(str, enum.Enum):
+class CapturePhase(enum.StrEnum):
     """The discrete stages of a Liparus capture operation."""
 
     APPROACH = "approach"
