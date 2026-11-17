@@ -8,6 +8,30 @@ is the road car that converts into a working submersible. Both raise the
 same engineering questions: can you hear the contact, can you say where it
 is, does it physically fit, and will the conversion survive the depth?
 
+## Mission model
+
+```mermaid
+flowchart TD
+    accTitle: LIPARUS implemented mission analyses
+    accDescr: Acoustic contacts, array, capture bay and vehicle parameters feed Passive detection, propagation and target-motion estimate; Array bearing estimate; Tanker clearance, vehicle conversion and pressure hull. The mission adapter returns detection, bearing, capture and hull-feasibility results with provenance, then a debrief.
+    I["Acoustic contacts, array, capture bay and vehicle parameters"]
+    G0["Passive detection, propagation and target-motion estimate"]
+    I --> G0
+    G1["Array bearing estimate"]
+    I --> G1
+    G2["Tanker clearance, vehicle conversion and pressure hull"]
+    I --> G2
+    O["mission.py: execute returns MissionOutcome<br/>Detection, bearing, capture and hull-feasibility results and provenance"]
+    G0 --> O
+    G1 --> O
+    G2 --> O
+    O --> F["debrief: mission summary"]
+```
+
+The branches group implemented capabilities; they do not imply a runtime order.
+
+**Source map:** [`sub_tracking.py`](src/the_spy_who_loved_me/sub_tracking.py), [`acoustics.py`](src/the_spy_who_loved_me/acoustics.py); [`beamforming.py`](src/the_spy_who_loved_me/beamforming.py); [`tanker_capture.py`](src/the_spy_who_loved_me/tanker_capture.py), [`vehicle_forensics.py`](src/the_spy_who_loved_me/vehicle_forensics.py), [`hull_forensics.py`](src/the_spy_who_loved_me/hull_forensics.py); [`mission.py`](src/the_spy_who_loved_me/mission.py).
+
 ## What this package does
 
 Six pure concept modules do the domain work, and three more compose and
