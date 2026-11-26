@@ -178,6 +178,7 @@ package failure — re-run it with the sandbox disabled.
 ## Cross-references
 
 - [`README.md`](README.md) — index of this directory
+- [Package maintenance](package-maintenance.md) — dependency and publication records
 - [`architecture.md`](architecture.md) — module-by-module structure
 - [`testing_philosophy.md`](testing_philosophy.md) — what the tests pin and why
 - [`../AGENTS.md`](../AGENTS.md) — package identity and layer-contract table

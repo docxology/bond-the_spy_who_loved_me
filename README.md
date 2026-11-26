@@ -8,6 +8,8 @@ is the road car that converts into a working submersible. Both raise the
 same engineering questions: can you hear the contact, can you say where it
 is, does it physically fit, and will the conversion survive the depth?
 
+See [package maintenance](docs/package-maintenance.md) for dependency and metadata checks.
+
 ## Mission model
 
 ```mermaid

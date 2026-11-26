@@ -76,3 +76,5 @@ as a convergence-analysis exemplar. Both are rewritten now, and
 `tests/test_repo_contracts.py::TestNoExemplarBoilerplate` fails on the
 boilerplate itself rather than on one spelling of the exemplar's name — which
 is why the old `rg` lineage check never saw it.
+
+[Package maintenance](package-maintenance.md) covers dependency and metadata checks.
