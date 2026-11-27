@@ -1,5 +1,8 @@
 # the_spy_who_loved_me — LIPARUS (The Spy Who Loved Me, 1977)
 
+See [package maintenance](docs/package-maintenance.md) for the package
+version, Python selection, and dependency provenance.
+
 **PROJECT BOND film package** — special-agent mission software exposing six
 deterministic domain concepts to the BOND fleet through the frozen `bond_api`
 mission protocol. No DOI, no release tag, no package registry; the only git
