@@ -1,5 +1,8 @@
 # The Spy Who Loved Me: LIPARUS
 
+See [package maintenance](docs/package-maintenance.md) for the package
+version, Python selection, and dependency provenance.
+
 Special-agent mission software for **The Spy Who Loved Me (1977)** under
 mission codename **LIPARUS** — a PROJECT BOND film package that models six
 deterministic concepts behind the film's set pieces. The *Liparus* is the

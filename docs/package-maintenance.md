@@ -1,5 +1,9 @@
 # Maintain the LIPARUS package
 
+This checkout is `the_spy_who_loved_me` 0.1.0. The declared Python
+range is `>=3.11`; [`.python-version`](../.python-version) selects
+Python 3.15 for the checkout.
+
 [`pyproject.toml`](../pyproject.toml) declares the package version and a relative
 dependency on a sibling checkout named `bond-api`. The [lockfile](../uv.lock)
 records the dependency layout. For version or packaging audits, distinguish
